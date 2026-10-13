@@ -199,14 +199,17 @@ describe('FilesService', () => {
   });
 
   describe('list', () => {
-    it('scopes non-ADMIN users to their own ACTIVE uploads', async () => {
+    it('scopes non-ADMIN users to their own ACTIVE and ORPHAN uploads', async () => {
       filesRepository.findMany.mockResolvedValue([makeFileRow()]);
       filesRepository.count.mockResolvedValue(1);
 
       const result = await service.list({ page: 1, limit: 20 }, user);
 
       const params = filesRepository.findMany.mock.calls[0][0];
-      expect(params.where).toEqual({ status: 'ACTIVE', uploadedBy: 'user-1' });
+      expect(params.where).toEqual({
+        status: { in: ['ACTIVE', 'ORPHAN'] },
+        uploadedBy: 'user-1',
+      });
       expect(filesRepository.count).toHaveBeenCalledWith(params.where);
       expect(result.total).toBe(1);
       expect(result.page).toBe(1);
@@ -215,14 +218,40 @@ describe('FilesService', () => {
       expect(result.items[0].size).toBe(5);
     });
 
-    it('lists all ACTIVE uploads for ADMIN users', async () => {
+    it('lists all ACTIVE and ORPHAN uploads for ADMIN users', async () => {
       filesRepository.findMany.mockResolvedValue([]);
       filesRepository.count.mockResolvedValue(0);
 
       await service.list({ page: 1, limit: 20 }, admin);
 
       const params = filesRepository.findMany.mock.calls[0][0];
-      expect(params.where).toEqual({ status: 'ACTIVE' });
+      expect(params.where).toEqual({ status: { in: ['ACTIVE', 'ORPHAN'] } });
+    });
+
+    it('includes ORPHAN-status files in the list result', async () => {
+      filesRepository.findMany.mockResolvedValue([
+        makeFileRow({ id: 'file-orphan', status: 'ORPHAN' }),
+      ]);
+      filesRepository.count.mockResolvedValue(1);
+
+      const result = await service.list({ page: 1, limit: 20 }, user);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].status).toBe('ORPHAN');
+      expect(result.total).toBe(1);
+    });
+
+    it('does not include DELETED files in the list query', async () => {
+      filesRepository.findMany.mockResolvedValue([]);
+      filesRepository.count.mockResolvedValue(0);
+
+      await service.list({ page: 1, limit: 20 }, user);
+
+      const params = filesRepository.findMany.mock.calls[0][0];
+      expect(params.where.status).toEqual({ in: ['ACTIVE', 'ORPHAN'] });
+      expect(params.where.status).not.toEqual({
+        in: ['ACTIVE', 'ORPHAN', 'DELETED'],
+      });
     });
 
     it('applies an insensitive contains search on originalName', async () => {
@@ -233,7 +262,7 @@ describe('FilesService', () => {
 
       const params = filesRepository.findMany.mock.calls[0][0];
       expect(params.where).toEqual({
-        status: 'ACTIVE',
+        status: { in: ['ACTIVE', 'ORPHAN'] },
         uploadedBy: 'user-1',
         originalName: { contains: 'invoIce', mode: 'insensitive' },
       });

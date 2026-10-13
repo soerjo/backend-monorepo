@@ -1,4 +1,4 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import {
@@ -24,14 +24,14 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      // forbidNonWhitelisted: true,
+      forbidNonWhitelisted: true,
       transform: true,
       transformOptions: { enableImplicitConversion: true },
     }),
   );
 
   app.useGlobalFilters(new AllExceptionsFilter());
-  app.useGlobalInterceptors(new ResponseTransformInterceptor());
+  app.useGlobalInterceptors(new ResponseTransformInterceptor(new Reflector()));
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('API')

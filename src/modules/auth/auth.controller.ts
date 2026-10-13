@@ -18,6 +18,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { LocalAuthGuard } from './local-auth.guard.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { ResponseMessage } from '../../common/decorators/response-message.decorator.js';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -53,6 +54,7 @@ export class AuthController {
 
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
+  @ResponseMessage('Password changed successfully')
   changePassword(
     @CurrentUser() user: AuthUser,
     @Body() dto: ChangePasswordDto,

@@ -1,6 +1,7 @@
 import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsPort,
@@ -41,6 +42,30 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   JWT_REFRESH_EXPIRATION: string = '7d';
+
+  @IsString()
+  @IsOptional()
+  MINIO_ENDPOINT: string = 'localhost';
+
+  @IsPort()
+  @IsOptional()
+  MINIO_PORT: string = '9000';
+
+  @IsIn(['true', 'false'])
+  @IsOptional()
+  MINIO_USE_SSL: string = 'false';
+
+  @IsString()
+  @IsNotEmpty()
+  MINIO_ACCESS_KEY!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  MINIO_SECRET_KEY!: string;
+
+  @IsString()
+  @IsOptional()
+  MINIO_BUCKET: string = 'app-uploads';
 }
 
 export function validate(config: Record<string, unknown>) {

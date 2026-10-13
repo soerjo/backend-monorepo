@@ -103,6 +103,7 @@ export class AuthService {
           60 *
           24,
       }),
+      user: payload,
     };
   }
 
@@ -150,6 +151,5 @@ export class AuthService {
     }
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.usersRepository.updatePassword(userId, hashedPassword);
-    return { message: 'Password changed successfully' };
   }
 }

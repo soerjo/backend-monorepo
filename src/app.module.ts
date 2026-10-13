@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { OrganizationsModule } from './modules/organizations/organizations.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { FilesModule } from './modules/files/files.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { loggerConfig } from './config/logger.config.js';
@@ -23,6 +24,7 @@ import { validate } from './config/env.validation.js';
     UsersModule,
     OrganizationsModule,
     HealthModule,
+    FilesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

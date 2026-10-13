@@ -4,38 +4,38 @@ import {
   ExecutionContext,
   CallHandler,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import type { Request } from 'express';
+import { RESPONSE_MESSAGE_KEY } from '../decorators/response-message.decorator.js';
 
-export interface Response<T> {
-  statusCode: number;
-  message: string;
-  data: T;
-  timestamp: string;
-  path: string;
+export interface Envelope<T> {
+  success: true;
+  data: T | null;
+  message?: string;
 }
 
 @Injectable()
 export class ResponseTransformInterceptor<T> implements NestInterceptor<
   T,
-  Response<T>
+  Envelope<T>
 > {
+  constructor(private readonly reflector: Reflector) {}
+
   intercept(
     context: ExecutionContext,
     next: CallHandler,
-  ): Observable<Response<T>> {
-    const request = context.switchToHttp().getRequest<Request>();
-    const response = context
-      .switchToHttp()
-      .getResponse<{ statusCode: number }>();
+  ): Observable<Envelope<T>> {
+    const message = this.reflector.getAllAndOverride<string | undefined>(
+      RESPONSE_MESSAGE_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
     return next.handle().pipe(
       map((data: T) => ({
-        statusCode: response.statusCode,
-        message: 'Success',
-        data,
-        timestamp: new Date().toISOString(),
-        path: request.url,
+        success: true as const,
+        data: data ?? null,
+        ...(message ? { message } : {}),
       })),
     );
   }

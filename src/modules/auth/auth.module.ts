@@ -8,6 +8,7 @@ import { LocalStrategy } from './strategies/local.strategy.js';
 import { JwtStrategy } from './strategies/jwt.strategy.js';
 import { GoogleStrategy } from './strategies/google.strategy.js';
 import { UsersModule } from '../users/users.module.js';
+import { parseDurationToSeconds } from '../../common/utils/token-expiry.util.js';
 
 @Module({
   imports: [
@@ -19,12 +20,9 @@ import { UsersModule } from '../users/users.module.js';
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_ACCESS_SECRET')!,
         signOptions: {
-          expiresIn:
-            Number(
-              configService
-                .get<string>('JWT_ACCESS_EXPIRATION')!
-                .replace(/\D/g, ''),
-            ) * 60, // in second
+          expiresIn: parseDurationToSeconds(
+            configService.get<string>('JWT_ACCESS_EXPIRATION')!,
+          ), // in second
         },
       }),
     }),

@@ -1,6 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
+import helmet from 'helmet';
 import {
   WINSTON_MODULE_NEST_PROVIDER,
   WINSTON_MODULE_PROVIDER,
@@ -11,16 +13,19 @@ import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor.js';
 import { createRequestLoggingMiddleware } from './common/middleware/request-logging.middleware.js';
+import { parseCorsOrigins } from './common/utils/cors-origins.util.js';
 import { MetricsService } from './modules/metrics/metrics.service.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+  app.use(helmet());
   app.setGlobalPrefix('api');
 
   const winstonLogger = app.get<Logger>(WINSTON_MODULE_PROVIDER);
   const metricsService = app.get(MetricsService);
+  const configService = app.get(ConfigService);
 
   app.use(createRequestLoggingMiddleware(winstonLogger, metricsService));
 
@@ -50,7 +55,14 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('docs', app, document);
 
-  app.enableCors();
+  const corsOrigins = parseCorsOrigins(
+    configService.get<string>('CORS_ORIGINS'),
+  );
+  if (corsOrigins.length > 0) {
+    app.enableCors({ origin: corsOrigins });
+  } else {
+    app.enableCors();
+  }
 
   await app.listen(process.env.PORT ?? 3000);
 }

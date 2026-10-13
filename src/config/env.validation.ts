@@ -58,6 +58,10 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   FRONTEND_URL: string = 'http://localhost:5173';
+
+  @IsString()
+  @IsOptional()
+  CORS_ORIGINS?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

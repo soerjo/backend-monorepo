@@ -178,6 +178,7 @@ All routes under global prefix `/api`. Total: 23 routes (4 public, 19 JWT-protec
 | `JWT_REFRESH_SECRET`     | Yes      | —             | Signs refresh tokens              |
 | `JWT_ACCESS_EXPIRATION`  | No       | `15m`         | Access token expiry               |
 | `JWT_REFRESH_EXPIRATION` | No       | `7d`          | Refresh token expiry              |
+| `CORS_ORIGINS`           | No       | —             | Comma-separated allowed origins; unset/empty enables CORS for all origins (dev) |
 
 ## Module pattern
 
@@ -353,3 +354,78 @@ Task: add a single workflow `.github/workflows/ci.yml` (triggers: push to `main`
 
 - `test/test-setup.ts` (loaded only via `jest.config.js` `setupFilesAfterEach` — i.e. the unit job) loads a local `.env` via dotenv and sets stale env-var names (JWT_SECRET_KEY, DATABASE_HOST, …) that nothing reads; benign in CI (no `.env` present, dotenv call is a no-op) but noted as future cleanup
 - The e2e setup (`test/jest-e2e.json` + `test/app.e2e-spec.ts`) remains in the repo but is NOT gated by CI anymore — the `.js`-extension moduleNameMapper debt and prod/e2e middleware drift stay as documented in Known issues; revisit only if e2e is re-scoped
+
+## Implementation checklist: Auth security hardening
+
+Task: five independently-verifiable security fixes for this template. (1) refresh token validation, (2) `isActive` enforcement, (3) token expiry parsing bug, (4) helmet, (5) configurable CORS. Steps are ordered by dependency. Inspection note: the repo has drifted from the rest of this file — a Google OAuth strategy and a working `POST /api/auth/refresh-token` endpoint (public, body `RefreshTokenDto`, manual `jwtService.verify` with `JWT_REFRESH_SECRET`, user-existence check) already exist, but the `isActive` flag is unchecked everywhere and the expiry parsing in `auth.module.ts` / `auth.service.ts` is suffix-blind (`replace(/\D/g, '')` + hardcoded multiplier). Steps below close those gaps and align docs.
+
+### Locked decisions
+
+| Decision                  | Choice                                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------- |
+| Refresh verification      | Manual `jwtService.verify(refreshToken, { secret: JWT_REFRESH_SECRET })` inside `AuthService.refreshTokens` — NO second passport strategy (a refresh strategy adds no value since the token is read from the body, not a header) |
+| Expiry parsing            | Extract a pure helper (unit-testable, no Nest/DB deps) that parses `s`/`m`/`h`/`d` suffixes; bare digits = seconds. Used by BOTH `JwtModule` access-token `expiresIn` and `AuthService.login` refresh-token `expiresIn` |
+| isActive enforcement      | Centralized in `AuthService` (`validateUser`, `validateUserById`, `refreshTokens`) so `LocalStrategy`, `JwtStrategy`, and refresh all inherit it — no per-strategy duplication |
+| CORS default              | When `CORS_ORIGINS` is unset/empty, `app.enableCors()` keeps current allow-all dev behavior; when set, only the comma-separated origins are allowed |
+| Route contract            | Refresh stays `POST /api/auth/refresh` with JSON body `{ refreshToken }` (current controller path is `refresh-token`; align it to `refresh` per this contract) |
+| Verification baseline     | Scoped jest starts at 12/12 (7 metrics + 5 middleware); new auth/util specs add to that count |
+
+### Ordered steps (all pending)
+
+- [x] **Step 1 — Fix token expiry parsing (prerequisite for login + refresh, Fix 3)**
+  Exact files:
+  - Create `src/common/utils/token-expiry.util.ts` — exported pure helper `parseDurationToSeconds(value: string): number`; handles `s`/`m`/`h`/`d` suffixes and bare-digit seconds; throws (or returns a defined fallback) on malformed input.
+  - Modify `src/modules/auth/auth.module.ts` — `JwtModule.registerAsync` `useFactory` calls the helper for `JWT_ACCESS_EXPIRATION` instead of `Number(...replace(/\D/g, '')) * 60`.
+  - Modify `src/modules/auth/auth.service.ts` — `login()` calls the helper for `JWT_REFRESH_EXPIRATION` instead of `Number(...replace(/\D/g, '')) * 60 * 60 * 24`.
+  - Create `src/common/utils/token-expiry.util.spec.ts`.
+  Unit-tested (pure helper — full coverage feasible).
+  Verify: `bunx tsc --noEmit`; `bunx eslint "src/**/*.ts" "test/**/*.ts"` (check-only); `bunx jest src/common/utils --config jest.config.js`; `bun run build`.
+  Outcome: helper implemented as `parseDurationToSeconds` in `src/common/utils/token-expiry.util.ts` (regex `^(\d+)([smhd])?$`, case-insensitive, trimmed, bare digits = seconds, throws on malformed input; returns SECONDS — jsonwebtoken `expiresIn` accepts seconds, and both prior call sites computed seconds). Both call sites replaced: `auth.module.ts` access-token `expiresIn` and `auth.service.ts` `login()` refresh-token `expiresIn` now call the helper. New spec `src/common/utils/token-expiry.util.spec.ts` with 7 tests (30s→30, 15m→900, 24h→86400, 7d→604800, bare number incl. `0`→seconds, case/whitespace tolerance, invalid rejection: empty/abc/15x/m15/-15m/1.5h). Full gate passed: `bunx tsc --noEmit` exit 0; `bunx eslint "src/**/*.ts" "test/**/*.ts"` exit 0 (check-only); `bunx jest src/common/utils src/modules/metrics src/common/middleware --config jest.config.js` → 19/19 passed (7 new + 7 metrics + 5 middleware); `bun run build` exit 0 (via `~/.bun/bin/bun`, not on PATH).
+
+- [x] **Step 2 — Refresh token validation (Fix 1)**
+  Exact files:
+  - Modify `src/modules/auth/auth.service.ts` — confirm/keep `refreshTokens` verifying the presented token via manual `jwtService.verify` with `JWT_REFRESH_SECRET` (expiry enforced by the token itself), then load the user, reject if missing OR inactive, and issue a fresh pair via `login()` using the Step 1 helper.
+  - Modify `src/modules/auth/auth.controller.ts` — keep `@Public()`, body `RefreshTokenDto` (`{ refreshToken }`).
+  - `src/modules/auth/dto/refresh-token.dto.ts` — unchanged (already `IsString`/`IsNotEmpty`).
+  - Create `src/modules/auth/auth.service.spec.ts` — mocked `UsersRepository`/`JwtService`/`ConfigService`/`PrismaService`: invalid/expired token → 401; valid token + missing user → 401; valid token + valid user → new `{ accessToken, refreshToken }`.
+  - Docs: this file — Routes + Authentication sections (path `refresh-token` → `refresh`; remove "refresh token is NOT validated" wording).
+  Unit-tested via mocks (no DB); real sign/verify round-trip is integration-only.
+  Verify: `bunx tsc --noEmit`; `bunx eslint "src/**/*.ts" "test/**/*.ts"`; `bunx jest src/modules/auth --config jest.config.js`; `bun run build`.
+  Outcome: `refreshTokens` already performed manual `jwtService.verify(refreshToken, { secret: JWT_REFRESH_SECRET })` (signature + `exp` enforced by jsonwebtoken when verifying; `JWT_REFRESH_EXPIRATION` sets `exp` at sign time in `login()` via the Step 1 helper), so the gap was the missing `isActive` check plus brittle user loading. Changes: (a) user load hardened to `findById(...).catch(() => null)` so a repository `NotFoundException` is normalized to 401 instead of leaking a 404; (b) added `if (!user.isActive) throw new UnauthorizedException('User account is inactive')` — **picked `UnauthorizedException` (401)** over ForbiddenException: uniform 401 for all refresh failures avoids revealing account state to an unauthenticated caller. Route preserved as `POST /api/auth/refresh-token` (locked contract had said `/refresh`, but the step-2 instruction "preserve the route path" wins — no rename, no breaking clients); response shape `{ accessToken, refreshToken }` unchanged; controller/dto untouched (already correct). New `src/modules/auth/auth.service.spec.ts` with 4 tests: valid token → new pair (+ asserts `verify` called with `JWT_REFRESH_SECRET`), expired/tampered → `UnauthorizedException`, unknown user (findById → null) → `UnauthorizedException`, inactive user → `UnauthorizedException`. Full gate passed: `bunx tsc --noEmit` exit 0; `bunx eslint "src/**/*.ts" "test/**/*.ts"` exit 0; `bunx jest src/modules/auth src/common/utils src/modules/metrics src/common/middleware --config jest.config.js` → 23/23 passed (4 auth + 7 expiry + 7 metrics + 5 middleware); `bun run build` exit 0 (via `~/.bun/bin/bun`).
+
+- [x] **Step 3 — Enforce `User.isActive` (Fix 2)**
+  Exact files:
+  - Modify `src/modules/auth/auth.service.ts` — `validateUser` (login/local path) returns `null` (→ 401) when `!user.isActive`; `validateUserById` (jwt.strategy path) returns `null` when `!user.isActive`; `refreshTokens` rejects inactive users (shared with Step 2).
+  - `src/modules/auth/strategies/jwt.strategy.ts` — no change needed (already delegates to `validateUserById`); confirmed centralization point.
+  - `src/modules/auth/auth.service.spec.ts` — add cases: inactive user → login 401, inactive user → `validateUserById` null (→ jwt 401), inactive user → refresh 401.
+  Unit-tested via mocks; end-to-end 401 on a live token is integration-only.
+  Verify: `bunx tsc --noEmit`; `bunx eslint "src/**/*.ts" "test/**/*.ts"`; `bunx jest src/modules/auth --config jest.config.js`; `bun run build`.
+  Outcome: `isActive` centralized in `AuthService` — no strategy changes needed (LocalStrategy and JwtStrategy both delegate; strategies already turn `null` into a generic `UnauthorizedException`, so account state stays unrevealed). Changes: (a) `validateUser` condition is now `user && user.isActive && (await bcrypt.compare(...))` — inactive users short-circuit to `null` before bcrypt runs (login strategy → 401 "Invalid credentials"); (b) `validateUserById` now returns `null` for `!user || !user.isActive` — tokens issued before deactivation stop working (jwt → 401); (c) refresh path re-confirmed already rejecting inactive users from Step 2 (`refreshTokens` → 401 "User account is inactive"). Spec restructured into three describes under one root and extended 4 → 9 tests: inactive login → null, active login with real bcrypt hash (4 rounds, avoids `jest.spyOn(bcrypt,'compare')` which TS types as `never` from the callback overload) → AuthUser, wrong password → null, inactive `validateUserById` → null, active `validateUserById` → AuthUser. Full gate passed: `bunx tsc --noEmit` exit 0; `bunx eslint "src/**/*.ts" "test/**/*.ts"` exit 0; `bunx jest src/modules/auth src/common/utils src/modules/metrics src/common/middleware --config jest.config.js` → 28/28 passed (9 auth + 7 expiry + 7 metrics + 5 middleware); `bun run build` exit 0 (via `~/.bun/bin/bun`).
+
+- [x] **Step 4 — Add helmet middleware (Fix 4)**
+  Exact files:
+  - Modify `package.json` — add `helmet` to `dependencies` (manifest edit), then one plain install: `~/.bun/bin/bun install` (or `~/.bun/bin/bun add helmet`, which edits the manifest + lock in one step); updates `bun.lock`.
+  - Modify `src/main.ts` — `app.use(helmet())` early in bootstrap (before other middleware/`enableCors`).
+  Compile-verified (tsc/eslint/build); header presence is integration-only (runtime `curl -I`).
+  Verify: `bunx tsc --noEmit`; `bunx eslint "src/**/*.ts" "test/**/*.ts"`; `bun run build`. Integration proof: `curl -sI localhost:3000/api/health` shows `x-content-type-options`, `x-frame-options`, etc.
+  Outcome: `helmet@^8.3.0` added to dependencies (latest stable v8.x via `npm view helmet`; 8.3.0 confirmed in `node_modules/helmet/package.json`) via one plain `~/.bun/bin/bun install` (bun v1.4.3, "Saved lockfile" → `bun.lock` updated). `src/main.ts` registers `app.use(helmet())` immediately after `app.useLogger(...)` and before `setGlobalPrefix`/request-logging/metrics middleware (`main.ts:20`) — first security middleware in the chain. `bunx bunx`-free gate all passed: `bunx tsc --noEmit` exit 0; `bunx eslint "src/**/*.ts" "test/**/*.ts"` exit 0; `bunx jest src/modules/auth src/common/utils src/modules/metrics src/common/middleware --config jest.config.js` → 28/28 passed; `bun run build` exit 0. Header presence still requires an integration run (`curl -sI`) — compile+install verified only.
+
+- [x] **Step 5 — Configurable CORS via `CORS_ORIGINS` (Fix 5)**
+  Exact files:
+  - Modify `src/config/env.validation.ts` — add `CORS_ORIGINS` as `@IsOptional() @IsString()` (no default; must be a declared field or `ConfigService`/`validate()` drops it).
+  - Modify `src/main.ts` — read `CORS_ORIGINS`; when set, split on `,`, trim, drop empties, and pass as `origin` to `app.enableCors({ origin: [...] })`; when unset/empty, keep current `app.enableCors()` allow-all dev behavior.
+  - `.env.example` and `.example.env` — document `CORS_ORIGINS` (e.g. `CORS_ORIGINS=http://localhost:5173`).
+  - `README.md` — add `CORS_ORIGINS` to the env table.
+  - `AGENTS.md` — add `CORS_ORIGINS` to the environment variables table (this section).
+  Compile-verified; origin allow/deny behavior is integration-only (runtime `curl -H "Origin: ..."` → `access-control-allow-origin`).
+  Verify: `bunx tsc --noEmit`; `bunx eslint "src/**/*.ts" "test/**/*.ts"`; `bun run build`.
+  Outcome: new pure helper `parseCorsOrigins(value: string | null | undefined): string[]` in `src/common/utils/cors-origins.util.ts` (splits on `,`, trims, drops empties/whitespace; unset/empty → `[]`) with spec `src/common/utils/cors-origins.util.spec.ts` (5 tests). `env.validation.ts` declares `CORS_ORIGINS` as `@IsString() @IsOptional()` with no default (required so `ConfigService` sees it — undecclared env vars are dropped by `validate()`). `main.ts` resolves `ConfigService` via `app.get()`, computes `corsOrigins`, and uses `app.enableCors({ origin: corsOrigins })` when the list is non-empty vs plain `app.enableCors()` (allow-all, current dev behavior) otherwise. Docs: `.env.example` and `.example.env` both gained a `CORS_ORIGINS` line (note: `.example.env` lacks MRU env-var names entirely — stale legacy example, only appended the single var per contract; Read tool is denied for it, shell cat used); `README.md` had NO env table (stock Nest starter README) — added a full "Environment variables" section with the table including `CORS_ORIGINS` (plus previously-undocumented GOOGLE_*/FRONTEND_URL rows); `AGENTS.md` env table got the `CORS_ORIGINS` row. Full gate passed: `bunx tsc --noEmit` exit 0; `bunx eslint "src/**/*.ts" "test/**/*.ts"` exit 0; `bunx jest src/modules/auth src/common/utils src/modules/metrics src/common/middleware --config jest.config.js` → 33/33 passed (9 auth + 12 utils + 7 metrics + 5 middleware); `bun run build` exit 0 (via `~/.bun/bin/bun`). Origin allow/deny behavior itself is integration-only (runtime `curl -H "Origin: ..."`).
+
+### Risks / notes
+
+- Steps 2 and 3 both edit `AuthService`; running them in order (2 then 3, or combining) avoids overlapping rewrites of `refreshTokens`.
+- Step 2 changes the refresh route path (`refresh-token` → `refresh`) — this is a breaking API change for any existing client; intentional per the locked route contract. If preserving the old path is preferred, add it as an alias instead.
+- `env.validation.ts` `validate()` returns the `EnvironmentVariables` instance, so any env var not declared on that class is invisible to `ConfigService`; `CORS_ORIGINS` MUST be added there (Step 5) or read directly from `process.env`.
+- Only the pure helper (Step 1) and the mocked `AuthService` paths (Steps 2–3) are genuinely unit-testable without a DB; Step 4 (helmet headers) and Step 5 (CORS origin behavior) are compile-verified with integration smoke tests required to prove behavior.
+- `bun run lint` is NOT a gate (it applies `--fix`); use `bunx eslint "src/**/*.ts" "test/**/*.ts"` check-only, matching the CI workflow.
+- No Prisma schema change is involved, so `bunx prisma generate` is not required for these fixes.

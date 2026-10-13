@@ -57,6 +57,25 @@ $ bun run test:e2e
 $ bun run test:cov
 ```
 
+## Environment variables
+
+Create a `.env` file (see `.env.example`) before running the app. Key variables:
+
+| Variable                 | Required | Default       | Description                                                                       |
+| ------------------------ | -------- | ------------- | --------------------------------------------------------------------------------- |
+| `NODE_ENV`               | No       | `development` | development \| production \| test                                                 |
+| `PORT`                   | No       | `3000`        | Server port                                                                       |
+| `DATABASE_URL`           | Yes      | —             | PostgreSQL connection string                                                      |
+| `JWT_ACCESS_SECRET`      | Yes      | —             | Signs access tokens                                                               |
+| `JWT_REFRESH_SECRET`     | Yes      | —             | Signs refresh tokens                                                              |
+| `JWT_ACCESS_EXPIRATION`  | No       | `15m`         | Access token expiry (`s`/`m`/`h`/`d` suffix, or bare seconds)                      |
+| `JWT_REFRESH_EXPIRATION` | No       | `7d`          | Refresh token expiry (`s`/`m`/`h`/`d` suffix, or bare seconds)                     |
+| `GOOGLE_CLIENT_ID`       | Yes      | —             | Google OAuth client ID                                                            |
+| `GOOGLE_CLIENT_SECRET`   | Yes      | —             | Google OAuth client secret                                                        |
+| `GOOGLE_CALLBACK_URL`    | No       | see `.env.example` | Google OAuth callback URL                                                    |
+| `FRONTEND_URL`           | No       | `http://localhost:5173` | Frontend base URL (Google OAuth redirect)                                |
+| `CORS_ORIGINS`           | No       | —             | Comma-separated allowed origins; unset/empty enables CORS for all origins (dev)   |
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

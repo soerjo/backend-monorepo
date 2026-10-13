@@ -12,6 +12,7 @@ import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import type { RegisterDto } from './dto/register.dto.js';
 import { $Enums, User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { parseDurationToSeconds } from '../../common/utils/token-expiry.util.js';
 
 @Injectable()
 export class AuthService {
@@ -27,7 +28,11 @@ export class AuthService {
     password: string,
   ): Promise<AuthUser | null> {
     const user = await this.usersRepository.findByEmail(email);
-    if (user && (await bcrypt.compare(password, user.password))) {
+    if (
+      user &&
+      user.isActive &&
+      (await bcrypt.compare(password, user.password))
+    ) {
       // const { password, ...result } = user;
       return {
         id: user.id,
@@ -44,7 +49,7 @@ export class AuthService {
 
   async validateUserById(id: string): Promise<AuthUser | null> {
     const user = await this.usersRepository.findById(id);
-    if (!user) return null;
+    if (!user || !user.isActive) return null;
 
     return {
       id: user.id,
@@ -120,15 +125,9 @@ export class AuthService {
       accessToken: this.jwtService.sign(payload),
       refreshToken: this.jwtService.sign(payload, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET')!,
-        expiresIn:
-          Number(
-            this.configService
-              .get<string>('JWT_REFRESH_EXPIRATION')!
-              .replace(/\D/g, '') as unknown as number,
-          ) *
-          60 *
-          60 *
-          24,
+        expiresIn: parseDurationToSeconds(
+          this.configService.get<string>('JWT_REFRESH_EXPIRATION')!,
+        ),
       }),
     };
   }
@@ -143,9 +142,14 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    const user = await this.usersRepository.findById(payload.id);
+    const user = await this.usersRepository
+      .findById(payload.id)
+      .catch(() => null);
     if (!user) {
       throw new UnauthorizedException('User no longer exists');
+    }
+    if (!user.isActive) {
+      throw new UnauthorizedException('User account is inactive');
     }
 
     const authUser: AuthUser = {

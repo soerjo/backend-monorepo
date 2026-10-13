@@ -341,6 +341,7 @@ Response `200` — `data`:
 
 - `expiresAt` — ISO 8601, exactly **+15 minutes** from generation.
 - The URL is a short-lived credential: it works **without** the JWT header until it expires (clients should download or re-presign before `expiresAt`).
+- The URL host is signed into the request (S3 SigV4 covers the `Host` header), so it is produced from the **public** MinIO endpoint (`MINIO_PUBLIC_ENDPOINT`/`MINIO_PUBLIC_PORT`, falling back to `MINIO_ENDPOINT`/`MINIO_PORT` when unset) — the address a browser can actually reach. It cannot be rewritten after the fact; only the signed host is returned.
 
 **Example**
 

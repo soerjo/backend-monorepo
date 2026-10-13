@@ -56,8 +56,8 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Run unit tests (metrics + middleware, explicit config)
-        run: npx jest src/modules/metrics src/common/middleware --config jest.config.js
+      - name: Run unit tests
+        run: npm test
 
   build:
     runs-on: ubuntu-latest

@@ -20,13 +20,13 @@ model User {
   firstName             String?
   lastName              String?
   isActive              Boolean  @default(true)
-  forgotPasswordRequest Boolean  @default(false)
   role                  RoleName @default(USER)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   organizationId        String
 
   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fileUploads           FileUpload[]
 
   @@map("users")
 }
@@ -42,4 +42,25 @@ model Organization {
   users       User[]
 
   @@map("organizations")
+}
+
+model FileUpload {
+  id           String   @id @default(uuid())
+  bucket       String   @default("app-uploads")
+  objectKey    String   @unique @map("object_key")
+  originalName String   @map("original_name")
+  mimeType     String   @map("mime_type")
+  sizeBytes    Int      @map("size_bytes")
+  checksum     String
+  status       String   @default("ACTIVE")
+  uploadedBy   String   @map("uploaded_by")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  uploader User @relation(fields: [uploadedBy], references: [id], onDelete: Restrict)
+
+  @@index([uploadedBy])
+  @@index([createdAt(sort: Desc)])
+  @@index([checksum])
+  @@map("file_uploads")
 }

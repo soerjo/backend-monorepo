@@ -6,7 +6,6 @@ import { AuthService } from './auth.service.js';
 import { AuthController } from './auth.controller.js';
 import { LocalStrategy } from './strategies/local.strategy.js';
 import { JwtStrategy } from './strategies/jwt.strategy.js';
-import { GoogleStrategy } from './strategies/google.strategy.js';
 import { UsersModule } from '../users/users.module.js';
 
 @Module({
@@ -30,7 +29,7 @@ import { UsersModule } from '../users/users.module.js';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, LocalStrategy, JwtStrategy, GoogleStrategy],
+  providers: [AuthService, LocalStrategy, JwtStrategy],
   exports: [AuthService],
 })
 export class AuthModule {}

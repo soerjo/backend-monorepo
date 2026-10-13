@@ -1,6 +1,7 @@
 import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsPort,
@@ -43,41 +44,28 @@ class EnvironmentVariables {
   JWT_REFRESH_EXPIRATION: string = '7d';
 
   @IsString()
-  @IsNotEmpty()
-  GOOGLE_CLIENT_ID!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  GOOGLE_CLIENT_SECRET!: string;
-
-  @IsString()
   @IsOptional()
-  GOOGLE_CALLBACK_URL: string =
-    'http://localhost:3000/api/auth/google/callback';
-
-  @IsString()
-  @IsOptional()
-  SMTP_HOST: string = 'localhost';
+  MINIO_ENDPOINT: string = 'localhost';
 
   @IsPort()
   @IsOptional()
-  SMTP_PORT: string = '587';
+  MINIO_PORT: string = '9000';
+
+  @IsIn(['true', 'false'])
+  @IsOptional()
+  MINIO_USE_SSL: string = 'false';
+
+  @IsString()
+  @IsNotEmpty()
+  MINIO_ACCESS_KEY!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  MINIO_SECRET_KEY!: string;
 
   @IsString()
   @IsOptional()
-  SMTP_USER: string = '';
-
-  @IsString()
-  @IsOptional()
-  SMTP_PASS: string = '';
-
-  @IsString()
-  @IsOptional()
-  SMTP_FROM: string = 'noreply@example.com';
-
-  @IsString()
-  @IsOptional()
-  FRONTEND_URL: string = 'http://localhost:5173';
+  MINIO_BUCKET: string = 'app-uploads';
 }
 
 export function validate(config: Record<string, unknown>) {

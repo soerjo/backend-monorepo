@@ -25,6 +25,15 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Default users
+
+`prisma/seed.ts` seeds two default users (run with `DATABASE_URL` exported — `npm run db:seed`; the seed runs via `bun`, since `tsx` is not a project dependency):
+
+- `admin@minio.local` / `Admin#12345` — role `ADMIN`, name "Admin Minio", organization slug `admin`
+- `soerjo@minio.local` / `Soerjo#12345` — role `USER`, name "Soerjo", organization slug `soerjo`
+
+Each user gets its own organization (`Organization of <email>`, slug taken from the email prefix) because `User.organizationId` is required. Re-running the seed is idempotent — it resets each default user's password, name, and role to the values above; existing organizations are kept. This is a standalone internal application, so these default credentials are intentionally committed — replace them for any non-internal deployment.
+
 ## Project setup
 
 ```bash

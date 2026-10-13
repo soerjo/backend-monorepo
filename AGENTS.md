@@ -304,3 +304,51 @@ Task: add per-request winston logging (method, url, status, duration) and prom-c
 - `/metrics` is unauthenticated — acceptable on the internal compose network; the app already publishes port 5000 to the host, so production should not expose `/metrics` publicly
 - Grafana admin password is `admin` for dev only — override via compose env vars in real deployments
 - Prometheus scrapes target the container port (`app:5000`), not the host-mapped port
+
+## Implementation checklist: GitHub Actions CI
+
+Task: add a single workflow `.github/workflows/ci.yml` (triggers: push to `main`, all `pull_request`) with jobs `quality`, `test`, `build` — all on Node 22 with npm cache. E2E excluded per user decision: this project uses unit tests only going forward. Do not write source code yet; this checklist covers prerequisite repo fixes first, then the workflow, then a local verification gate mirroring every CI command.
+
+### Locked decisions
+
+| Decision                | Choice                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| E2E excluded            | No `e2e` job in CI, no postgres/redis service containers — user decision; test/jest-e2e.json stays unfixed (moduleNameMapper debt remains, out of scope) |
+| Unit tests only         | Standing decision: unit tests only for this template — new features must ship with unit tests (`*.spec.ts`) next to the module |
+| Lint debt               | The 15 pre-existing eslint errors + 1 warning in `src` files are fixed as part of this task, so CI gates honestly (check-only lint is red from day one otherwise) |
+| Unit test scope         | Both spec directories gated: `src/modules/metrics` AND `src/common/middleware` (there are two spec files, one per dir) |
+| Artifact upload         | NO `dist/` upload — `build` job just runs `npm run build`                                            |
+| Job orchestration       | `test`, `build` gated with `needs: quality` (fast-fail; parallel-from-scratch is wasteful)          |
+| Lockfiles               | Three lockfiles remain (`package-lock.json`, `yarn.lock`, `bun.lock`) untouched; `npm ci` reads `package-lock.json` only — lockfile cleanup is a separate follow-up task |
+| Lint command in CI      | `npx eslint "src/**/*.ts" "test/**/*.ts"` check-only — the `lint` npm script bakes in `--fix` and must NOT be used in CI |
+
+### Ordered steps (all pending)
+
+- [x] **Step 1 — Fix the 15 pre-existing eslint errors + 1 warning in src files**
+  Run `npx eslint "src/**/*.ts" "test/**/*.ts"` to list all current problems. Known instances: `no-unused-vars` (unused imports like `User` in some files), `no-unsafe-call` in `src/main.ts` at `21:11` and `26:11`, plus issues in current-user.decorator, roles.guard, response-transform.interceptor, auth.service, register.dto, users.repository. Apply minimal, behavior-preserving changes only (remove unused imports, narrow `unknown` before property access, etc.). Do NOT widen existing rule overrides in `eslint.config.mjs` as a shortcut.
+  Verify: `npx eslint "src/**/*.ts" "test/**/*.ts"` exits 0 (or 0 errors + only the accepted `bootstrap()` floating-promise warning); `npx tsc --noEmit` clean; `npm run build` clean; scoped unit tests still pass (`npx jest src/modules/metrics src/common/middleware --config jest.config.js`).
+  Outcome: verified locally — check-only eslint exits 0 (no errors), `npx tsc --noEmit` clean, scoped jest passes 12/12 (7 metrics + 5 middleware).
+
+- [x] **Step 2 — Create `.github/workflows/ci.yml`**
+  Single workflow, triggers `push` (branches: `main`) + `pull_request`. Three jobs only (no `e2e`).
+  - **Job `quality`**: `actions/checkout@v4` → `actions/setup-node@v4` (`node-version: 22`, `cache: npm`) → `npm ci` → `npx prisma generate` → `npx eslint "src/**/*.ts" "test/**/*.ts"` (check-only, NO `--fix`) → `npx tsc --noEmit`.
+  - **Job `test`** (`needs: quality`): same checkout/setup-node/npm-ci steps → `npx jest src/modules/metrics src/common/middleware --config jest.config.js` (explicit `--config jest.config.js` because repo-wide `npm test` is blocked by the known dual-config conflict — `jest.config.js` AND the `jest` key in `package.json` are both present).
+  - **Job `build`** (`needs: quality`): same checkout/setup-node/npm-ci steps → `npm run build`. No artifact upload (see Locked decisions).
+  Verify: `node -e "JSON.stringify(require('./.github/workflows/ci.yml'))"` is NOT applicable (YAML not JSON) — instead validate structure by inspection or `docker run --rm -v "$PWD/.github/workflows/ci.yml:/w.yml" mikefarah/yq -e '.jobs | has("quality")' /w.yml` if docker unavailable, simplest: `npx yaml-lint .github/workflows/ci.yml` or visually confirm; minimum: file exists at correct path and `git status` shows only intended changes.
+  Outcome: `.github/workflows/ci.yml` created and validated with `python3 -c "import yaml; yaml.safe_load(...)"` — 3 jobs (`quality`, `test` needs quality, `build` needs quality), Node 22 + npm cache, concurrency group with cancel-in-progress on PRs, triggers push `main` + `pull_request`; no e2e job, no services, no secrets; descriptively named steps.
+
+- [x] **Step 3 — Final local verification gate (same commands as CI)**
+  Run in order and confirm all green:
+  1. `npm ci` (fresh install from package-lock.json)
+  2. `npx prisma generate`
+  3. `npx eslint "src/**/*.ts" "test/**/*.ts"` (exit 0)
+  4. `npx tsc --noEmit` (exit 0)
+  5. `npx jest src/modules/metrics src/common/middleware --config jest.config.js` (12 tests pass: 7 metrics + 5 middleware)
+  6. `npm run build` (exit 0, `dist/` emitted)
+  Then push to a branch / open PR and confirm all 3 jobs green on the GitHub Actions UI.
+  Outcome: gate passed locally — eslint check-only exit 0, `npx tsc --noEmit` clean (TSC_OK), scoped jest 12/12 passed, `npm run build` succeeded (BUILD_OK).
+
+### Risks / notes
+
+- `test/test-setup.ts` (loaded only via `jest.config.js` `setupFilesAfterEach` — i.e. the unit job) loads a local `.env` via dotenv and sets stale env-var names (JWT_SECRET_KEY, DATABASE_HOST, …) that nothing reads; benign in CI (no `.env` present, dotenv call is a no-op) but noted as future cleanup
+- The e2e setup (`test/jest-e2e.json` + `test/app.e2e-spec.ts`) remains in the repo but is NOT gated by CI anymore — the `.js`-extension moduleNameMapper debt and prod/e2e middleware drift stay as documented in Known issues; revisit only if e2e is re-scoped

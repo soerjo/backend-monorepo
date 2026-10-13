@@ -51,6 +51,17 @@ class EnvironmentVariables {
   @IsOptional()
   MINIO_PORT: string = '9000';
 
+  // Public endpoint used ONLY to sign presigned download URLs so they are
+  // reachable from a browser. Falls back to MINIO_ENDPOINT/MINIO_PORT when
+  // unset (see MinioService).
+  @IsString()
+  @IsOptional()
+  MINIO_PUBLIC_ENDPOINT?: string;
+
+  @IsPort()
+  @IsOptional()
+  MINIO_PUBLIC_PORT?: string;
+
   @IsIn(['true', 'false'])
   @IsOptional()
   MINIO_USE_SSL: string = 'false';

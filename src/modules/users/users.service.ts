@@ -19,8 +19,8 @@ export class UsersService {
       userName: user.firstName + ' ' + user.lastName,
       organizationName: user.organization.name,
       role: user.role,
-      organizationId: user.organization.id
-    }
+      organizationId: user.organization.id,
+    };
   }
 
   async create(dto: CreateUserDto) {

@@ -19,7 +19,7 @@ import { UsersModule } from '../users/users.module.js';
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_ACCESS_SECRET')!,
         signOptions: {
-          expiresIn: 
+          expiresIn:
             Number(
               configService
                 .get<string>('JWT_ACCESS_EXPIRATION')!

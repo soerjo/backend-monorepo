@@ -24,8 +24,8 @@ export class UsersRepository {
     const user = await this.prisma.user.findUnique({
       where: { id },
       include: {
-        organization: {select: { id: true, name: true }},
-      }
+        organization: { select: { id: true, name: true } },
+      },
     });
     if (!user) {
       throw new NotFoundException(`User with id ${id} not found`);

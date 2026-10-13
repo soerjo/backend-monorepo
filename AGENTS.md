@@ -83,7 +83,7 @@ src/
 
 ## Routes
 
-All routes under global prefix `/api`. Total: 23 routes (4 public, 19 JWT-protected, 16 admin-gated).
+All routes under global prefix `/api`. Total: 23 routes (4 public, 19 JWT-protected, 16 admin-gated) + 1 raw Express handler outside the prefix (`GET /metrics`, public — see Metrics below).
 
 ### Auth (`/api/auth`)
 
@@ -142,6 +142,12 @@ All routes under global prefix `/api`. Total: 23 routes (4 public, 19 JWT-protec
 | ------ | ---- | ------ | --------------- |
 | GET    | `/`  | Public | DB health check |
 
+### Metrics (`/metrics` — outside the `/api` prefix)
+
+| Method | Path       | Auth   | Description                                                                                    |
+| ------ | ---------- | ------ | ---------------------------------------------------------------------------------------------- |
+| GET    | `/metrics` | Public | Raw Express handler registered in `main.ts` — bypasses prefix, guards, throttler, and transform |
+
 ## Request processing pipeline
 
 1. Winston logger (replaces NestJS default)
@@ -190,7 +196,7 @@ All business modules follow a 3-layer pattern:
 
 ## Known issues / technical debt
 
-- **No unit tests** — zero `.spec.ts` files; only 1 e2e test (health endpoint)
+- **Minimal test coverage** — only 2 spec files (`metrics.service.spec.ts`, `request-logging.middleware.spec.ts`, from the monitoring task); only 1 e2e test (health endpoint). `npm test` fails due to a jest config conflict (`jest.config.js` and the `jest` key in `package.json` are both present) — run scoped instead: `npx jest <path> --config jest.config.js`. Note: `test/jest-e2e.json` lacks the `.js`-extension `moduleNameMapper` added to `jest.config.js`, so the e2e spec's `.js` imports may fail to resolve (unverified; e2e requires a live DB)
 - **E2E test mismatch** — test setup doesn't apply `AllExceptionsFilter` or `ResponseTransformInterceptor`, so response shape differs from production
 - **Unused code**: `ROLES` constants, `BaseResponseDto`, `PaginationDto` are defined but never used
 - **`CreateRoleDto.organizationId`** is silently dropped — `RolesRepository.create()` only passes `{ name }`
@@ -200,3 +206,100 @@ All business modules follow a 3-layer pattern:
 - **No helmet middleware** — no security headers configured
 - **CORS allows all origins** — security concern for production
 - **Role scoping issue** — roles are global (unique name), not per-organization, despite the junction table design
+
+## Implementation checklist: HTTP request logging + Prometheus metrics + Grafana
+
+Task: add per-request winston logging (method, url, status, duration) and prom-client metrics (`http_requests_total` counter, `http_request_duration_seconds` histogram; labels `method`/`route`/`status`) exposed at `/metrics`, scraped by Prometheus and visualized in Grafana.
+
+### Locked decisions
+
+| Decision                | Choice                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| Logging/metrics capture | Raw Express middleware registered in `main.ts` via `app.use()` (NOT an interceptor — guards reject 401/403/429 and unmatched 404 requests before interceptors run; middleware sees everything) |
+| Duration + status       | Measured with `performance.now()`; final status read on the `res.on('finish')` event (works even when `AllExceptionsFilter` writes the response) |
+| `/metrics` endpoint     | Raw Express handler via `app.use('/metrics', ...)` in `main.ts` — bypasses global prefix `/api`, JWT guard, throttler, and `ResponseTransformInterceptor` (which would JSON-wrap the Prometheus text format) |
+| Route label             | Route template from `req.route.path` (join if array), fallback `'unmatched'` when no route matched — avoids label cardinality explosion from UUIDs. Raw `originalUrl` is used for the log line instead |
+| Skipped paths           | `/metrics` only (no log line, not counted). `/api/health` stays logged                              |
+| Default process metrics | `collectDefaultMetrics()` from prom-client — ENABLED (adds process CPU/memory/event-loop series)     |
+| Grafana host port       | `3001:3000` (avoids clash with the app's default dev port 3000)                                     |
+| Pinned images           | `prom/prometheus:v3.15.0`, `grafana/grafana:13.0.10`                                                |
+| prom-client labels      | All label values coerced to strings (prom-client throws on `undefined`)                             |
+
+### Files to create / modify
+
+- Create `src/modules/metrics/metrics.module.ts` — plain `@Module` (no `@Global()`), provides `MetricsService`, imported by `AppModule`
+- Create `src/modules/metrics/metrics.service.ts` — owns a prom-client `Registry`:
+  - Counter `http_requests_total` (labels: `method`, `route`, `status`)
+  - Histogram `http_request_duration_seconds` (same labels; buckets `0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10`)
+  - `collectDefaultMetrics({ register })`
+  - `recordRequest(method, route, status, durationSeconds)` — increments counter + observes histogram in one call
+  - `getMetrics(): Promise<string>` and a `contentType` getter for the endpoint
+- Create `src/common/middleware/request-logging.middleware.ts`:
+  - Exported pure helper `getRouteLabel(req)` (unit-testable)
+  - Exported factory `createRequestLoggingMiddleware(logger, metricsService)` — calls `next()` immediately, hooks `res.on('finish')`, logs `METHOD originalUrl status durationMs` at winston `info` level with structured meta `{ method, url, status, durationMs, route }` via the injected raw winston logger, records both metrics, skips `/metrics` (bugfix: originally logged at `http` level, which was silently suppressed — the Console transport's default level is `info` and winston npm levels rank http=3 below info=2 in severity)
+- Modify `src/main.ts` — resolve `WINSTON_MODULE_PROVIDER` + `MetricsService` via `app.get()`, register the request-logging middleware and the `/metrics` handler (sets `Content-Type` from the registry's `contentType`, `await`s the metrics text before `res.end()` — `no-floating-promises` is enforced as a warning)
+- Modify `src/app.module.ts` — add `MetricsModule` to imports
+- Create `docker/prometheus/prometheus.yml` — `scrape_interval: 15s`, single job, `metrics_path: /metrics`, static target `app:5000` (service name + container port, NOT the host-mapped port)
+- Create `docker/grafana/provisioning/datasources/prometheus.yml` — datasource type `prometheus`, url `http://prometheus:9090`, `isDefault: true`, fixed `uid: prometheus` (dashboard references this uid deterministically)
+- Create `docker/grafana/provisioning/dashboards/dashboards.yml` — file-based dashboard provider, path `/var/lib/grafana/dashboards`
+- Create `docker/grafana/dashboards/nestjs-overview.json` — panels:
+  - Request rate by route: `sum(rate(http_requests_total[5m])) by (route)`
+  - Status code distribution: `sum by (status) (rate(http_requests_total[5m]))`
+  - p95 latency: `histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))`
+  - p99 latency: same with `0.99`
+  - Error ratio: `sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))`
+  - Process CPU / resident memory from default metrics (`process_cpu_seconds_total`, `process_resident_memory_bytes`)
+- Modify `docker-compose.yml` — add `prometheus` (pinned image, port `9090:9090`, read-only mount of `prometheus.yml`, `app-network`, `depends_on: app`) and `grafana` (pinned image, port `3001:3000`, read-only mounts of provisioning + dashboards dirs, named `grafana_data` volume, `GF_SECURITY_ADMIN_USER/PASSWORD=admin/admin` for dev, `depends_on: prometheus`) services, plus the `grafana_data` top-level volume
+
+### Ordered steps (all pending)
+
+- [x] **Step 1 — Install `prom-client`**
+  Install with `bun add prom-client` (the Docker dev container installs via bun) AND `npm install prom-client` (keeps `package-lock.json` in sync — repo carries three lockfiles: `package-lock.json`, `yarn.lock`, `bun.lock`).
+  Verify: `prom-client` present in `package.json` dependencies; both lockfiles show the addition in `git diff`.
+
+- [x] **Step 2 — Create `MetricsModule` + `MetricsService`**
+  Registry, counter, histogram, `collectDefaultMetrics()`, `recordRequest()`, `getMetrics()`, `contentType`. Add `MetricsModule` to `AppModule` imports. All imports use `.js` extensions (nodenext).
+  Verify: `npm run lint`, `npx tsc --noEmit`, `npm run build` all clean.
+  Outcome: metrics files + `app.module.ts` lint-clean; `npx tsc --noEmit` clean; `npm run build` clean (`dist/modules/metrics` emitted). Repo-wide `npm run lint` exits non-zero from 15 pre-existing errors + 1 warning in unrelated files (current-user.decorator, roles.guard, response-transform.interceptor, auth.service, register.dto, users.repository, main.ts) — pre-dates this step (HEAD had 21 problems); the gate's `--fix` resolved 5 formatting-only issues in auth.module/users.repository/users.service.
+
+- [x] **Step 3 — Create request-logging middleware; wire `/metrics` in `main.ts`**
+  `createRequestLoggingMiddleware(logger, metricsService)` + `getRouteLabel(req)` helper; register both middlewares in `main.ts` after `setGlobalPrefix`.
+  Verify: lint/tsc/build clean. Then `npm run start:dev` (requires valid `.env`):
+  - (a) `curl localhost:3000/api/health` → winston log line `GET /api/health 200 - Xms`
+  - (b) `curl localhost:3000/metrics` → Prometheus text format with `http_requests_total` + `http_request_duration_seconds_bucket` and correct `Content-Type` header
+  - (c) `curl localhost:3000/api/users` without token → 401 still logged and counted (middleware-sees-everything property)
+  - (d) hit a bogus path → route label `unmatched`, status 404
+  - (e) hit `/api/users/<uuid>` with admin token → route label `/api/users/:id`, not the raw UUID
+  - (f) repeat a request → counter value increments between scrapes
+  - (g) `/metrics` requests produce no log lines
+  Outcome: static gates pass — scoped eslint on changed files 0 errors (`main.ts` keeps its pre-existing `bootstrap()` floating-promise warning), `npx tsc --noEmit` clean, `npm run build` clean (`dist/common/middleware/` + wired `dist/main.js` emitted, verified in output). Runtime curl smoke test (a)–(g) deferred to parent, to be run separately. Parent smoke (a) surfaced a bug: request lines logged at `http` level were silently suppressed by the Console transport's default `info` level — middleware now logs at `info` level (meta structure unchanged, transport config untouched); fix re-verified with `npx tsc --noEmit` (clean).
+
+- [x] **Step 4 — Add docker config: prometheus scrape + grafana provisioning + compose services**
+  All `docker/` files listed above, pinned images `prom/prometheus:v3.15.0` and `grafana/grafana:13.0.10`, Grafana port `3001:3000`.
+  Verify: `docker compose config` parses cleanly. NOTE: the compose `app` service uses an anonymous `/app/node_modules` volume, so the image must be rebuilt to pick up `prom-client`: `docker compose build app && docker compose up -d --renew-anon-volumes app` (quick alternative: `docker compose exec app bun add prom-client`).
+  Outcome (verified externally by parent): `docker compose config` parses OK, dashboard JSON valid, all 4 config files present (`docker/prometheus/prometheus.yml`, `docker/grafana/provisioning/datasources/prometheus.yml`, `docker/grafana/provisioning/dashboards/dashboards.yml`, `docker/grafana/dashboards/nestjs-overview.json`); `prometheus` + `grafana` services and `grafana_data` volume added to compose. The app-image rebuild note above still applies before Step 5.
+
+- [!] **Step 5 — Start and verify the monitoring stack**
+  Verify: `docker compose up -d prometheus grafana`, then:
+  - (a) http://localhost:9090/targets shows the `app:5000` target UP
+  - (b) querying `http_requests_total` in the Prometheus UI returns samples
+  - (c) http://localhost:3001 (admin/admin) → datasource auto-provisioned, dashboard renders
+  - (d) generate load (`for i in $(seq 1 50); do curl -s localhost:3000/api/health > /dev/null; done`) → request-rate and latency panels move
+  Readiness (static pre-startup checks only; runtime verification owned by parent): all 4 docker config files present and parse-verified (Step 4); both pinned image tags exist on Docker Hub (`prom/prometheus:v3.15.0`, `grafana/grafana:13.0.10`); host port 9090 is free. **Startup blockers on this host** — another project's stack (my-pharmacy) is running and holds: port **3001** (its grafana), **5432** (its postgres), **6379** (its redis), and **3000** (its frontend; our `.env` sets `PORT=3000` so the compose `app` maps `3000:5000`) — `docker compose up` will fail to bind these until the parent either stops that stack or remaps our host ports (a 3001 remap would amend a locked decision, so it is the parent's call). Note: with the pharmacy stack up, Step 5(d)'s `curl localhost:3000` would hit its frontend, not our app. The Step 4 app-image rebuild for `prom-client` (`docker compose build app && docker compose up -d --renew-anon-volumes app`) is also still required before scraping can succeed.
+  Blocked (user decision): host ports 3000/3001/5432/6379 are occupied by other live stacks (my-pharmacy, incl. `postgres_db` and `redis_cache`) — runtime compose verification deferred until those ports are free or remapped. Local smoke test of `/metrics` + winston request logs already done and passing on host (app run on port 3100).
+
+- [x] **Step 6 — Full gate + docs**
+  Verify: `npm run lint && npx tsc --noEmit && npm run build && npm test` all pass; `npm run test:e2e` (requires live DB; note the e2e app doesn't register the raw middlewares — same prod/e2e drift as documented above). Update the Routes section of this file to add `/metrics` (public, raw Express handler, outside the `/api` prefix).
+  Outcome (gate run externally by parent): `npx tsc --noEmit` OK; `npm run build` OK; `npm run lint` exits non-zero with 15 errors + 1 warning — all in files untouched by this task (pre-existing; verified at HEAD with 21 problems, the gate's `--fix` earlier resolved 5 formatting-only ones); `npm test` cannot run due to a pre-existing jest config conflict (`jest.config.js` AND the `jest` key in `package.json` are both present) plus no test files in the repo — unrelated to this task. Routes section of this file updated with `GET /metrics` (public, raw Express handler, outside the `/api` prefix). `npm run test:e2e` not part of this gate run.
+
+- [x] **Step 7 — Optional: unit tests**
+  `src/modules/metrics/metrics.service.spec.ts` (counter/histogram increments, string label coercion) and a spec for `getRouteLabel`. These would be the first unit tests in the repo (see Known issues).
+  Verify: `npx jest src/modules/metrics/metrics.service.spec.ts`.
+  Outcome: created `src/modules/metrics/metrics.service.spec.ts` (7 tests: prometheus content type, counter increments per request, distinct label series, numeric-status → string label coercion, histogram bucket placement for 0.12s, histogram count/sum, default process metrics present) and `src/common/middleware/request-logging.middleware.spec.ts` (5 tests for `getRouteLabel`: route template, array-path join, `'unmatched'` fallback for missing/non-string/empty/non-string-array paths). Infra fix required: added `'^(\\.{1,2}/.*)\\.js$': '$1'` to `jest.config.js` `moduleNameMapper` — jest could not resolve the repo's nodenext `.js`-extension relative imports (`Cannot find module './metrics.service.js'`); `test/jest-e2e.json` lacks the same mapper (pre-existing latent issue). Verification: `npx jest src/modules/metrics --config jest.config.js` → 7/7 passed; `npx jest src/common/middleware --config jest.config.js` → 5/5 passed; scoped eslint on both specs 0 problems; `npx tsc --noEmit` clean. `npm test` (unscoped) remains blocked by the pre-existing dual-config conflict documented in Known issues.
+
+### Risks / notes
+
+- `req.route.path` availability depends on Express 5 router internals — Step 3(e) verifies it explicitly; fallbacks are the `'unmatched'` label or deriving the route label from an interceptor instead
+- `/metrics` is unauthenticated — acceptable on the internal compose network; the app already publishes port 5000 to the host, so production should not expose `/metrics` publicly
+- Grafana admin password is `admin` for dev only — override via compose env vars in real deployments
+- Prometheus scrapes target the container port (`app:5000`), not the host-mapped port

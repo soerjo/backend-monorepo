@@ -115,7 +115,9 @@ export class FilesService {
   ): Promise<FileUploadListDto> {
     const page = query.page;
     const limit = Math.min(query.limit, MAX_LIST_LIMIT);
-    const where: Prisma.FileUploadWhereInput = { status: 'ACTIVE' };
+    const where: Prisma.FileUploadWhereInput = {
+      status: { in: ['ACTIVE', 'ORPHAN'] },
+    };
     if (user.role !== $Enums.RoleName.ADMIN) {
       where.uploadedBy = user.id;
     }

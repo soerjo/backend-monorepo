@@ -5,13 +5,11 @@ import {
   WINSTON_MODULE_NEST_PROVIDER,
   WINSTON_MODULE_PROVIDER,
 } from 'nest-winston';
-import type { Request, Response } from 'express';
 import type { Logger } from 'winston';
 import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor.js';
 import { createRequestLoggingMiddleware } from './common/middleware/request-logging.middleware.js';
-import { MetricsService } from './modules/metrics/metrics.service.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -20,14 +18,8 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   const winstonLogger = app.get<Logger>(WINSTON_MODULE_PROVIDER);
-  const metricsService = app.get(MetricsService);
 
-  app.use(createRequestLoggingMiddleware(winstonLogger, metricsService));
-
-  app.use('/metrics', async (_req: Request, res: Response) => {
-    res.set('Content-Type', metricsService.contentType);
-    res.end(await metricsService.getMetrics());
-  });
+  app.use(createRequestLoggingMiddleware(winstonLogger));
 
   app.useGlobalPipes(
     new ValidationPipe({

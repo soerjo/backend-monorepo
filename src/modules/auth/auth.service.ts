@@ -6,12 +6,11 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersRepository } from '../users/users.repository.js';
-import { EmailService } from '../email/email.service.js';
 import * as bcrypt from 'bcryptjs';
 // import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import type { RegisterDto } from './dto/register.dto.js';
-import { $Enums, User } from '@prisma/client';
+import { $Enums } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
 @Injectable()
@@ -20,7 +19,6 @@ export class AuthService {
     private usersRepository: UsersRepository,
     private jwtService: JwtService,
     private configService: ConfigService,
-    private emailService: EmailService,
     private prisma: PrismaService,
   ) {}
 
@@ -90,33 +88,6 @@ export class AuthService {
     return result;
   }
 
-  async validateGoogleUser(
-    email: string,
-    firstName: string,
-    lastName: string,
-    organizationId: string,
-  ): Promise<AuthUser> {
-    let user: User = (await this.usersRepository.findByEmail(email)) as User;
-    if (!user) {
-      user = await this.usersRepository.create({
-        email,
-        password: '',
-        firstName,
-        lastName,
-        organizationId,
-        // roleId,
-      });
-    }
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      organizationId: user.organizationId,
-    };
-  }
-
   login(payload: AuthUser) {
     return {
       accessToken: this.jwtService.sign(payload),
@@ -162,23 +133,6 @@ export class AuthService {
     return this.login(authUser);
   }
 
-  async setPassword(userId: string, newPassword: string) {
-    const user = await this.usersRepository.findByEmail(
-      (await this.usersRepository.findById(userId)).email,
-    );
-    if (!user) {
-      throw new UnauthorizedException('User not found');
-    }
-    if (user.password) {
-      throw new BadRequestException(
-        'Password already set. Use change password instead.',
-      );
-    }
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await this.usersRepository.updatePassword(userId, hashedPassword);
-    return { message: 'Password set successfully' };
-  }
-
   async changePassword(
     userId: string,
     currentPassword: string,
@@ -188,9 +142,7 @@ export class AuthService {
       (await this.usersRepository.findById(userId)).email,
     );
     if (!user || !user.password) {
-      throw new BadRequestException(
-        'No password set. Use set password instead.',
-      );
+      throw new BadRequestException('No password set for this account.');
     }
     const isValid = await bcrypt.compare(currentPassword, user.password);
     if (!isValid) {
@@ -199,65 +151,5 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.usersRepository.updatePassword(userId, hashedPassword);
     return { message: 'Password changed successfully' };
-  }
-
-  async forgotPassword(email: string) {
-    const user = await this.usersRepository.findByEmail(email);
-    if (!user) {
-      return { message: 'If the email exists, a reset link will be sent' };
-    }
-    const payload: AuthUser = {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      organizationId: user.organizationId,
-    };
-    const resetToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('JWT_REFRESH_SECRET')!,
-      expiresIn: '1h',
-    });
-
-    const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
-    const resetUrl = `${frontendUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
-
-    await this.emailService.sendMail({
-      to: email,
-      subject: 'Reset your password',
-      template: 'forgot-password',
-      context: { resetUrl },
-    });
-
-    await this.usersRepository.update(user.id, { forgotPasswordRequest: true });
-
-    // return { message: 'If the email exists, a reset link will be sent' };
-    return {
-      to: email,
-      subject: 'Reset your password',
-      template: 'forgot-password',
-      context: { resetUrl },
-    };
-  }
-
-  async resetPassword(token: string, newPassword: string) {
-    let payload: AuthUser;
-    try {
-      payload = this.jwtService.verify<AuthUser>(token, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET')!,
-      });
-    } catch {
-      throw new UnauthorizedException('Invalid or expired reset token');
-    }
-    const user = await this.usersRepository.findUserRequestForgotPassword(
-      payload.email,
-    );
-    if (!user) {
-      throw new UnauthorizedException('User not request forgot password');
-    }
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await this.usersRepository.updateForgotPasswordReq(user.id, hashedPassword);
-    return { message: 'Password reset successfully' };
   }
 }

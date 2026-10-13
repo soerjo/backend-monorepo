@@ -17,8 +17,6 @@ import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { SetPasswordDto } from './dto/set-password.dto.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
-import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
-import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { LocalAuthGuard } from './local-auth.guard.js';
 import { GoogleAuthGuard } from './google-auth.guard.js';
@@ -91,19 +89,5 @@ export class AuthController {
       dto.currentPassword,
       dto.newPassword,
     );
-  }
-
-  @Public()
-  @Post('forgot-password')
-  @HttpCode(HttpStatus.OK)
-  forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto.email);
-  }
-
-  @Public()
-  @Post('reset-password')
-  @HttpCode(HttpStatus.OK)
-  resetPassword(@Body() dto: ResetPasswordDto) {
-    return this.authService.resetPassword(dto.token, dto.newPassword);
   }
 }

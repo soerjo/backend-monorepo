@@ -39,12 +39,6 @@ export class UsersRepository {
     });
   }
 
-  async findUserRequestForgotPassword(email: string) {
-    return this.prisma.user.findUnique({
-      where: { email: email, forgotPasswordRequest: true },
-    });
-  }
-
   async create(
     data: Prisma.XOR<Prisma.UserCreateInput, Prisma.UserUncheckedCreateInput>,
   ) {
@@ -85,16 +79,6 @@ export class UsersRepository {
         isActive: true,
         createdAt: true,
         updatedAt: true,
-      },
-    });
-  }
-
-  async updateForgotPasswordReq(id: string, hashedPassword: string) {
-    return this.prisma.user.update({
-      where: { id },
-      data: {
-        password: hashedPassword,
-        forgotPasswordRequest: false,
       },
     });
   }

@@ -57,26 +57,6 @@ class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
-  SMTP_HOST: string = 'localhost';
-
-  @IsPort()
-  @IsOptional()
-  SMTP_PORT: string = '587';
-
-  @IsString()
-  @IsOptional()
-  SMTP_USER: string = '';
-
-  @IsString()
-  @IsOptional()
-  SMTP_PASS: string = '';
-
-  @IsString()
-  @IsOptional()
-  SMTP_FROM: string = 'noreply@example.com';
-
-  @IsString()
-  @IsOptional()
   FRONTEND_URL: string = 'http://localhost:5173';
 }
 

@@ -95,7 +95,6 @@ export class AuthService {
     firstName: string,
     lastName: string,
     organizationId: string,
-    roleId: string,
   ): Promise<AuthUser> {
     let user: User = (await this.usersRepository.findByEmail(email)) as User;
     if (!user) {

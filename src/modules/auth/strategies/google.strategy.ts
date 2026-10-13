@@ -34,7 +34,6 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       firstName,
       lastName,
       '4d977551-a23f-414e-9b92-d38ec3c1e1f6',
-      '4d977551-a23f-414e-9b92-d38ec3c1e1f6',
     );
   }
 }

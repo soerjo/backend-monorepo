@@ -2,21 +2,22 @@
 
 ## Commands
 
-- `npm run build` — nest build (output to `dist/`, cleared each build)
-- `npm run start:dev` — dev server with watch (port 3000, overridable via `PORT` env)
-- `npm run lint` — eslint with auto-fix (flat config at `eslint.config.mjs`)
-- `npm run test` — unit tests (jest, `src/**/*.spec.ts`)
-- `npm run test:e2e` — e2e tests (jest, `test/**/*.e2e-spec.ts`, config at `test/jest-e2e.json`)
-- `npm run format` — prettier on `src/` and `test/`
-- `npm run test:cov` — coverage output to `coverage/`
-- `npx prisma generate` — regenerate Prisma client after schema changes
-- `npx prisma migrate dev` — create and apply a migration (dev)
-- `npx prisma migrate deploy` — apply pending migrations (prod)
+- `bun install` — install dependencies (single lockfile: `bun.lock`)
+- `bun run build` — nest build (output to `dist/`, cleared each build)
+- `bun run start:dev` — dev server with watch (port 3000, overridable via `PORT` env)
+- `bun run lint` — eslint with auto-fix (flat config at `eslint.config.mjs`)
+- `bun run test` — unit tests (jest, `src/**/*.spec.ts`)
+- `bun run test:e2e` — e2e tests (jest, `test/**/*.e2e-spec.ts`, config at `test/jest-e2e.json`)
+- `bun run format` — prettier on `src/` and `test/`
+- `bun run test:cov` — coverage output to `coverage/`
+- `bunx prisma generate` — regenerate Prisma client after schema changes
+- `bunx prisma migrate dev` — create and apply a migration (dev)
+- `bunx prisma migrate deploy` — apply pending migrations (prod)
 
-Run a single test file: `npx jest src/path/to/file.spec.ts`
-Run a single e2e test: `npx jest --config ./test/jest-e2e.json test/app.e2e-spec.ts`
+Run a single test file: `bunx jest src/path/to/file.spec.ts`
+Run a single e2e test: `bunx jest --config ./test/jest-e2e.json test/app.e2e-spec.ts`
 
-No typecheck script is defined; use `npx tsc --noEmit` to typecheck.
+No typecheck script is defined; use `bunx tsc --noEmit` to typecheck.
 
 ## Key facts
 
@@ -196,7 +197,7 @@ All business modules follow a 3-layer pattern:
 
 ## Known issues / technical debt
 
-- **Minimal test coverage** — only 2 spec files (`metrics.service.spec.ts`, `request-logging.middleware.spec.ts`, from the monitoring task); only 1 e2e test (health endpoint). `npm test` fails due to a jest config conflict (`jest.config.js` and the `jest` key in `package.json` are both present) — run scoped instead: `npx jest <path> --config jest.config.js`. Note: `test/jest-e2e.json` lacks the `.js`-extension `moduleNameMapper` added to `jest.config.js`, so the e2e spec's `.js` imports may fail to resolve (unverified; e2e requires a live DB)
+- **Minimal test coverage** — only 2 spec files (`metrics.service.spec.ts`, `request-logging.middleware.spec.ts`, from the monitoring task); only 1 e2e test (health endpoint). `bun run test` fails due to a jest config conflict (`jest.config.js` and the `jest` key in `package.json` are both present) — run scoped instead: `bunx jest <path> --config jest.config.js`. Note: `test/jest-e2e.json` lacks the `.js`-extension `moduleNameMapper` added to `jest.config.js`, so the e2e spec's `.js` imports may fail to resolve (unverified; e2e requires a live DB)
 - **E2E test mismatch** — test setup doesn't apply `AllExceptionsFilter` or `ResponseTransformInterceptor`, so response shape differs from production
 - **Unused code**: `ROLES` constants, `BaseResponseDto`, `PaginationDto` are defined but never used
 - **`CreateRoleDto.organizationId`** is silently dropped — `RolesRepository.create()` only passes `{ name }`
@@ -254,8 +255,8 @@ Task: add per-request winston logging (method, url, status, duration) and prom-c
 ### Ordered steps (all pending)
 
 - [x] **Step 1 — Install `prom-client`**
-  Install with `bun add prom-client` (the Docker dev container installs via bun) AND `npm install prom-client` (keeps `package-lock.json` in sync — repo carries three lockfiles: `package-lock.json`, `yarn.lock`, `bun.lock`).
-  Verify: `prom-client` present in `package.json` dependencies; both lockfiles show the addition in `git diff`.
+  Install with `bun add prom-client` (the Docker dev container installs via bun; `bun.lock` is the single lockfile).
+  Verify: `prom-client` present in `package.json` dependencies and recorded in `bun.lock`.
 
 - [x] **Step 2 — Create `MetricsModule` + `MetricsService`**
   Registry, counter, histogram, `collectDefaultMetrics()`, `recordRequest()`, `getMetrics()`, `contentType`. Add `MetricsModule` to `AppModule` imports. All imports use `.js` extensions (nodenext).
@@ -307,7 +308,7 @@ Task: add per-request winston logging (method, url, status, duration) and prom-c
 
 ## Implementation checklist: GitHub Actions CI
 
-Task: add a single workflow `.github/workflows/ci.yml` (triggers: push to `main`, all `pull_request`) with jobs `quality`, `test`, `build` — all on Node 22 with npm cache. E2E excluded per user decision: this project uses unit tests only going forward. Do not write source code yet; this checklist covers prerequisite repo fixes first, then the workflow, then a local verification gate mirroring every CI command.
+Task: add a single workflow `.github/workflows/ci.yml` (triggers: push to `main`, all `pull_request`) with jobs `quality`, `test`, `build` — all on Bun via `oven-sh/setup-bun@v2`. E2E excluded per user decision: this project uses unit tests only going forward. Do not write source code yet; this checklist covers prerequisite repo fixes first, then the workflow, then a local verification gate mirroring every CI command.
 
 ### Locked decisions
 
@@ -317,9 +318,9 @@ Task: add a single workflow `.github/workflows/ci.yml` (triggers: push to `main`
 | Unit tests only         | Standing decision: unit tests only for this template — new features must ship with unit tests (`*.spec.ts`) next to the module |
 | Lint debt               | The 15 pre-existing eslint errors + 1 warning in `src` files are fixed as part of this task, so CI gates honestly (check-only lint is red from day one otherwise) |
 | Unit test scope         | Both spec directories gated: `src/modules/metrics` AND `src/common/middleware` (there are two spec files, one per dir) |
-| Artifact upload         | NO `dist/` upload — `build` job just runs `npm run build`                                            |
+| Artifact upload         | NO `dist/` upload — `build` job just runs `bun run build`                                            |
 | Job orchestration       | `test`, `build` gated with `needs: quality` (fast-fail; parallel-from-scratch is wasteful)          |
-| Lockfiles               | Three lockfiles remain (`package-lock.json`, `yarn.lock`, `bun.lock`) untouched; `npm ci` reads `package-lock.json` only — lockfile cleanup is a separate follow-up task |
+| Lockfiles               | Single lockfile (`bun.lock`); CI installs with `bun install --frozen-lockfile` — `package-lock.json` and `yarn.lock` were removed in the Bun migration |
 | Lint command in CI      | `npx eslint "src/**/*.ts" "test/**/*.ts"` check-only — the `lint` npm script bakes in `--fix` and must NOT be used in CI |
 
 ### Ordered steps (all pending)

@@ -23,7 +23,7 @@ import { UsersModule } from '../users/users.module.js';
             Number(
               configService
                 .get<string>('JWT_ACCESS_EXPIRATION')!
-                .replace(/\D/g, '') as unknown as number,
+                .replace(/\D/g, ''),
             ) * 60, // in second
         },
       }),

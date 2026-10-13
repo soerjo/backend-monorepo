@@ -625,3 +625,24 @@ Task: implement the v1 file-upload feature specified by `docs/PRD.md` + `docs/AP
 - `uploaded_by` is ON DELETE RESTRICT — deleting a user who has uploads fails with an FK error until their files are handled (DB_DESIGN §6.6; per-user cleanup is out of scope)
 - objectKey uniqueness never relies on the sanitized name (uuid prefix; the DB UNIQUE on `object_key` is defensive only)
 - Docs are the target contract — if implementation reality diverges, the docs win or the divergence is documented explicitly; never silently drift
+
+## Deployment
+
+Production deploy config (added 2026-10-13): `docker-compose.prod.yml` — ONE service (`app`), no postgres/minio services (external, shared with the other stacks on this host). Invoked with `-f`, so the dev `docker-compose.override.yml` does NOT merge in.
+
+| Piece          | Detail                                                                                                                                                                                              |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service        | `app`: `container_name: minio-file-service`, `build` from the production multi-stage `Dockerfile` (bun), `restart: unless-stopped`, ports `3110:3000`                                                |
+| Container port | `PORT=3000` in the container (main.ts reads `process.env.PORT ?? 3000`; the Dockerfile production stage `EXPOSE`s 3000) — host 3110 → container 3000. Separate from the DEV compose app (override host port 3100) |
+| Network        | `internal_net` declared `external: true` — the network must pre-exist (`docker network create internal_net`) with the `postgres_db` and `minio` containers attached; env hosts resolve over it (`postgres_db:5432`, `minio:9000` — CONTAINER ports, NOT the host-mapped 5432/9100). Verified: `internal_net` already exists on this host |
+| Secrets        | `${POSTGRES_PASSWORD}`, `${MINIO_SECRET_KEY}`, `${JWT_ACCESS_SECRET}`, `${JWT_REFRESH_SECRET}` interpolate from `.env.prod` (gitignored — `.gitignore` gains `.env.prod`; `.env.prod.example` is committed with placeholders; the REAL `.env.prod` is parent-provided, never committed). `MINIO_ACCESS_KEY=soerjo_minio` is non-secret and inline |
+| Deploy         | `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build`                                                                                                                        |
+| Validate       | `docker compose -f docker-compose.prod.yml --env-file .env.prod config` — plain `config` WITHOUT `--env-file` still parses but blanks the variables with warnings ("The POSTGRES_PASSWORD variable is not set. Defaulting to a blank string."); always deploy with `--env-file .env.prod` |
+
+Supporting changes baked in with this config:
+
+- **`Dockerfile` builder stage now runs `bunx prisma generate`** (after `COPY . .`, before `bun run build`) — bun blocks prisma's postinstall (`bun install` → "Blocked 2 postinstalls"), so without this the baked `node_modules` lacks the generated Prisma client and the app crashes at import time (the same infra fix the monitoring checklist had to apply manually inside the container, now baked into the image)
+- **Pre-existing `.dockerignore` (verified, no change needed)** — it already excludes `node_modules` (so a host `node_modules` cannot clobber the builder's bun-installed one after `COPY . .`) and all dotfiles via `.*` (so host `.env`/`.env.prod` secrets are never baked into the image); `logs`/`dist`/`coverage`/`.git` are excluded as well
+- `.gitignore` gains `.env.prod`
+
+Status: config-validated only — `docker compose -f docker-compose.prod.yml --env-file .env.prod config` parsed cleanly with a dummy `.env.prod` (then the dummy was removed; the real one is created by the parent at deploy time). `docker compose up` was NOT run per instruction. NOTE: host port 3110 is currently held by the Step-7 smoke process (host pid, not a container) — it must be stopped before the first deploy or the port binding will fail.

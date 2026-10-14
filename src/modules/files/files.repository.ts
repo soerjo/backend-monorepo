@@ -37,11 +37,23 @@ export class FilesRepository {
     return this.prisma.fileUpload.count({ where });
   }
 
-  async softDelete(id: string): Promise<number> {
+  async softDelete(id: string, userId: string): Promise<number> {
     const result = await this.prisma.fileUpload.updateMany({
-      where: { id, status: 'ACTIVE' },
-      data: { status: 'DELETED' },
+      where: { id, isDeleted: false },
+      data: { isDeleted: true, deletedAt: new Date(), deletedBy: userId },
     });
     return result.count;
+  }
+
+  async findPurgeable(cutoff: Date, take: number): Promise<FileUpload[]> {
+    return this.prisma.fileUpload.findMany({
+      where: { isDeleted: true, deletedAt: { lt: cutoff } },
+      orderBy: { deletedAt: 'asc' },
+      take,
+    });
+  }
+
+  async hardDelete(id: string): Promise<void> {
+    await this.prisma.fileUpload.delete({ where: { id } });
   }
 }

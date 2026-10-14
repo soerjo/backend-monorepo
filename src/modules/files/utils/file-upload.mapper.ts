@@ -1,5 +1,7 @@
 import type { FileUpload } from '@prisma/client';
 
+export type FileUploadStatus = 'ACTIVE' | 'ORPHAN';
+
 export interface FileUploadDto {
   id: string;
   bucket: string;
@@ -8,7 +10,10 @@ export interface FileUploadDto {
   mimeType: string;
   size: number;
   checksum: string;
-  status: string;
+  status: FileUploadStatus;
+  isDeleted: boolean;
+  deletedAt: string | null;
+  deletedBy: string | null;
   uploadedBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -23,7 +28,10 @@ export function toFileUploadDto(file: FileUpload): FileUploadDto {
     mimeType: file.mimeType,
     size: file.sizeBytes,
     checksum: file.checksum,
-    status: file.status,
+    status: file.status as FileUploadStatus,
+    isDeleted: file.isDeleted,
+    deletedAt: file.deletedAt ? file.deletedAt.toISOString() : null,
+    deletedBy: file.deletedBy,
     uploadedBy: file.uploadedBy,
     createdAt: file.createdAt,
     updatedAt: file.updatedAt,

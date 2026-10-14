@@ -1,11 +1,14 @@
 import { plainToInstance } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsPort,
   IsString,
+  Min,
   validateSync,
 } from 'class-validator';
 
@@ -77,6 +80,17 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   MINIO_BUCKET: string = 'app-uploads';
+
+  // Hard-delete (purge) job. Disabled by default so no object is ever removed
+  // from storage unless explicitly opted in.
+  @IsBoolean()
+  @IsOptional()
+  HARD_DELETE_ENABLED: boolean = false;
+
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  HARD_DELETE_RETENTION_DAYS: number = 365;
 }
 
 export function validate(config: Record<string, unknown>) {

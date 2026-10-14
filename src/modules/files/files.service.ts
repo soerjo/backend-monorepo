@@ -116,7 +116,7 @@ export class FilesService {
     const page = query.page;
     const limit = Math.min(query.limit, MAX_LIST_LIMIT);
     const where: Prisma.FileUploadWhereInput = {
-      status: { in: ['ACTIVE', 'ORPHAN'] },
+      isDeleted: false,
     };
     if (user.role !== $Enums.RoleName.ADMIN) {
       where.uploadedBy = user.id;
@@ -178,7 +178,7 @@ export class FilesService {
 
   async remove(id: string, user: AuthUser): Promise<FileUploadDto> {
     await this.getAccessibleActiveFile(id, user);
-    const deletedCount = await this.filesRepository.softDelete(id);
+    const deletedCount = await this.filesRepository.softDelete(id, user.id);
     if (deletedCount === 0) {
       throw new AppError(
         HttpStatus.NOT_FOUND,
@@ -202,7 +202,7 @@ export class FilesService {
     user: AuthUser,
   ): Promise<FileUpload> {
     const file = await this.filesRepository.findById(id);
-    if (!file || file.status === 'DELETED') {
+    if (!file || file.isDeleted) {
       throw new AppError(
         HttpStatus.NOT_FOUND,
         'FILE_NOT_FOUND',

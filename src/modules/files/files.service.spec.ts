@@ -59,6 +59,9 @@ function makeFileRow(overrides: Partial<FileUpload> = {}): FileUpload {
     sizeBytes: 5,
     checksum: helloSha256,
     status: 'ACTIVE',
+    isDeleted: false,
+    deletedAt: null,
+    deletedBy: null,
     uploadedBy: 'user-1',
     createdAt: new Date('2026-10-13T09:15:00.000Z'),
     updatedAt: new Date('2026-10-13T09:15:00.000Z'),
@@ -199,7 +202,7 @@ describe('FilesService', () => {
   });
 
   describe('list', () => {
-    it('scopes non-ADMIN users to their own ACTIVE and ORPHAN uploads', async () => {
+    it('scopes non-ADMIN users to their own non-deleted uploads', async () => {
       filesRepository.findMany.mockResolvedValue([makeFileRow()]);
       filesRepository.count.mockResolvedValue(1);
 
@@ -207,7 +210,7 @@ describe('FilesService', () => {
 
       const params = filesRepository.findMany.mock.calls[0][0];
       expect(params.where).toEqual({
-        status: { in: ['ACTIVE', 'ORPHAN'] },
+        isDeleted: false,
         uploadedBy: 'user-1',
       });
       expect(filesRepository.count).toHaveBeenCalledWith(params.where);
@@ -218,14 +221,14 @@ describe('FilesService', () => {
       expect(result.items[0].size).toBe(5);
     });
 
-    it('lists all ACTIVE and ORPHAN uploads for ADMIN users', async () => {
+    it('lists all non-deleted uploads for ADMIN users', async () => {
       filesRepository.findMany.mockResolvedValue([]);
       filesRepository.count.mockResolvedValue(0);
 
       await service.list({ page: 1, limit: 20 }, admin);
 
       const params = filesRepository.findMany.mock.calls[0][0];
-      expect(params.where).toEqual({ status: { in: ['ACTIVE', 'ORPHAN'] } });
+      expect(params.where).toEqual({ isDeleted: false });
     });
 
     it('includes ORPHAN-status files in the list result', async () => {
@@ -241,17 +244,14 @@ describe('FilesService', () => {
       expect(result.total).toBe(1);
     });
 
-    it('does not include DELETED files in the list query', async () => {
+    it('filters out deleted files (isDeleted=false)', async () => {
       filesRepository.findMany.mockResolvedValue([]);
       filesRepository.count.mockResolvedValue(0);
 
       await service.list({ page: 1, limit: 20 }, user);
 
       const params = filesRepository.findMany.mock.calls[0][0];
-      expect(params.where.status).toEqual({ in: ['ACTIVE', 'ORPHAN'] });
-      expect(params.where.status).not.toEqual({
-        in: ['ACTIVE', 'ORPHAN', 'DELETED'],
-      });
+      expect(params.where.isDeleted).toBe(false);
     });
 
     it('applies an insensitive contains search on originalName', async () => {
@@ -262,7 +262,7 @@ describe('FilesService', () => {
 
       const params = filesRepository.findMany.mock.calls[0][0];
       expect(params.where).toEqual({
-        status: { in: ['ACTIVE', 'ORPHAN'] },
+        isDeleted: false,
         uploadedBy: 'user-1',
         originalName: { contains: 'invoIce', mode: 'insensitive' },
       });
@@ -377,7 +377,11 @@ describe('FilesService', () => {
 
     it('rejects with FILE_NOT_FOUND when the file is soft-DELETED', async () => {
       filesRepository.findById.mockResolvedValue(
-        makeFileRow({ status: 'DELETED' }),
+        makeFileRow({
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletedBy: user.id,
+        }),
       );
 
       await expectAppError(service.getById('file-1', user), 'FILE_NOT_FOUND');
@@ -430,7 +434,11 @@ describe('FilesService', () => {
 
     it('does not presign for a soft-DELETED file', async () => {
       filesRepository.findById.mockResolvedValue(
-        makeFileRow({ status: 'DELETED' }),
+        makeFileRow({
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletedBy: user.id,
+        }),
       );
 
       await expectAppError(
@@ -447,7 +455,9 @@ describe('FilesService', () => {
         .mockResolvedValueOnce(makeFileRow())
         .mockResolvedValueOnce(
           makeFileRow({
-            status: 'DELETED',
+            isDeleted: true,
+            deletedAt: new Date('2026-10-13T09:20:00.000Z'),
+            deletedBy: user.id,
             updatedAt: new Date('2026-10-13T09:20:00.000Z'),
           }),
         );
@@ -455,14 +465,21 @@ describe('FilesService', () => {
 
       const result = await service.remove('file-1', user);
 
-      expect(filesRepository.softDelete).toHaveBeenCalledWith('file-1');
-      expect(result.status).toBe('DELETED');
+      expect(filesRepository.softDelete).toHaveBeenCalledWith(
+        'file-1',
+        user.id,
+      );
+      expect(result.isDeleted).toBe(true);
       expect(minioService.removeObject).not.toHaveBeenCalled();
     });
 
     it('rejects a repeat delete of an already-DELETED file with FILE_NOT_FOUND', async () => {
       filesRepository.findById.mockResolvedValue(
-        makeFileRow({ status: 'DELETED' }),
+        makeFileRow({
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletedBy: user.id,
+        }),
       );
 
       await expectAppError(service.remove('file-1', user), 'FILE_NOT_FOUND');

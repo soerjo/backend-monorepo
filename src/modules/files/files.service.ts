@@ -160,6 +160,7 @@ export class FilesService {
       const url = await this.minioService.presignedGetObject(
         file.objectKey,
         PRESIGN_EXPIRY_SECONDS,
+        file.bucket,
       );
       return {
         url,

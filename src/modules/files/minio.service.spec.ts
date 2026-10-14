@@ -108,6 +108,37 @@ describe('MinioService', () => {
 
       expect(seenHosts).toEqual(['100.92.245.124', '100.92.245.124']);
     });
+
+    it('signs against the provided bucket instead of the configured default', async () => {
+      const service = new MinioService(makeConfigService(internalValues));
+      const seenBuckets: string[] = [];
+      jest
+        .spyOn(Minio.Client.prototype, 'presignedGetObject')
+        .mockImplementation(function (this: Minio.Client, bucket: string) {
+          seenBuckets.push(bucket);
+          return Promise.resolve(`http://signed/${bucket}/key`);
+        });
+
+      const url = await service.presignedGetObject('key', 900, 'test');
+
+      expect(seenBuckets).toEqual(['test']);
+      expect(url).toBe('http://signed/test/key');
+    });
+
+    it('defaults to the configured bucket when no bucket is provided', async () => {
+      const service = new MinioService(makeConfigService(internalValues));
+      const seenBuckets: string[] = [];
+      jest
+        .spyOn(Minio.Client.prototype, 'presignedGetObject')
+        .mockImplementation(function (this: Minio.Client, bucket: string) {
+          seenBuckets.push(bucket);
+          return Promise.resolve(`http://signed/${bucket}/key`);
+        });
+
+      await service.presignedGetObject('key', 900);
+
+      expect(seenBuckets).toEqual(['app-uploads']);
+    });
   });
 
   describe('data operations', () => {

@@ -105,9 +105,10 @@ export class MinioService implements OnModuleInit {
   async presignedGetObject(
     objectKey: string,
     expirySeconds: number,
+    bucket: string = this.bucket,
   ): Promise<string> {
     return this.getSigningClient().presignedGetObject(
-      this.bucket,
+      bucket,
       objectKey,
       expirySeconds,
     );

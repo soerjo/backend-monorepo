@@ -26,7 +26,16 @@ SET
   "bucket" = 'test',
   "object_key" = substr("object_key", 6)
 WHERE "status" = 'ORPHAN'
-  AND "object_key" LIKE 'test/%';
+  AND "object_key" LIKE 'test/%'
+  -- Rows whose stripped key already exists are skipped: the duplicate is a
+  -- byte-identical copy preserved under its own bucket prefix, and the
+  -- composite UNIQUE(bucket, object_key) added by migration 20261014094500
+  -- keeps both.
+  AND NOT EXISTS (
+    SELECT 1 FROM "file_uploads" u2
+    WHERE u2."bucket" = 'test'
+      AND u2."object_key" = substr("file_uploads"."object_key", 6)
+  );
 
 -- 'default-upload/' is 15 characters -> substr from position 16 strips it.
 UPDATE "file_uploads"
@@ -34,4 +43,13 @@ SET
   "bucket" = 'default-upload',
   "object_key" = substr("object_key", 16)
 WHERE "status" = 'ORPHAN'
-  AND "object_key" LIKE 'default-upload/%';
+  AND "object_key" LIKE 'default-upload/%'
+  -- Rows whose stripped key already exists are skipped: the duplicate is a
+  -- byte-identical copy preserved under its own bucket prefix, and the
+  -- composite UNIQUE(bucket, object_key) added by migration 20261014094500
+  -- keeps both.
+  AND NOT EXISTS (
+    SELECT 1 FROM "file_uploads" u2
+    WHERE u2."bucket" = 'default-upload'
+      AND u2."object_key" = substr("file_uploads"."object_key", 16)
+  );

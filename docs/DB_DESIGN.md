@@ -59,19 +59,19 @@ erDiagram
 
 ### 3.1 Column spec
 
-| Column          | Type        | Constraints / default                                                  |
-| --------------- | ----------- | ---------------------------------------------------------------------- |
-| `id`            | uuid\*      | PK, DEFAULT `gen_random_uuid()`                                        |
-| `bucket`        | TEXT        | NOT NULL, DEFAULT `'app-uploads'`                                      |
-| `object_key`    | TEXT        | NOT NULL, UNIQUE                                                       |
-| `original_name` | TEXT        | NOT NULL                                                               |
-| `mime_type`     | TEXT        | NOT NULL                                                               |
-| `size_bytes`    | INTEGER     | NOT NULL, CHECK (`size_bytes > 0`)                                     |
-| `checksum`      | TEXT        | NOT NULL — sha256 hex (64 chars)                                       |
-| `status`        | TEXT        | NOT NULL, DEFAULT `'ACTIVE'`, CHECK (`status IN ('ACTIVE','DELETED')`) |
-| `uploaded_by`   | uuid\*      | NOT NULL, REFERENCES `users(id)` **ON DELETE RESTRICT**                |
-| `created_at`    | TIMESTAMPTZ | NOT NULL, DEFAULT `now()`                                              |
-| `updated_at`    | TIMESTAMPTZ | NOT NULL — app-maintained (Prisma `@updatedAt`)                        |
+| Column          | Type        | Constraints / default                                                                                       |
+| --------------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
+| `id`            | uuid\*      | PK, DEFAULT `gen_random_uuid()`                                                                             |
+| `bucket`        | TEXT        | NOT NULL, DEFAULT `'app-uploads'`                                                                           |
+| `object_key`    | TEXT        | NOT NULL, UNIQUE per bucket (composite UNIQUE(bucket, object_key) via `file_uploads_bucket_object_key_key`) |
+| `original_name` | TEXT        | NOT NULL                                                                                                    |
+| `mime_type`     | TEXT        | NOT NULL                                                                                                    |
+| `size_bytes`    | INTEGER     | NOT NULL, CHECK (`size_bytes > 0`)                                                                          |
+| `checksum`      | TEXT        | NOT NULL — sha256 hex (64 chars)                                                                            |
+| `status`        | TEXT        | NOT NULL, DEFAULT `'ACTIVE'`, CHECK (`status IN ('ACTIVE','DELETED')`)                                      |
+| `uploaded_by`   | uuid\*      | NOT NULL, REFERENCES `users(id)` **ON DELETE RESTRICT**                                                     |
+| `created_at`    | TIMESTAMPTZ | NOT NULL, DEFAULT `now()`                                                                                   |
+| `updated_at`    | TIMESTAMPTZ | NOT NULL — app-maintained (Prisma `@updatedAt`)                                                             |
 
 \* **Type note (uuid vs TEXT):** the spec above describes `id` and `uploaded_by` as uuid semantically, but the template stores **all ids as TEXT** (Prisma `String` without `@db.Uuid` — see §2), and a FK column must match the referenced column's type. Therefore both columns are **TEXT holding uuid values**; a strictly `uuid`-typed DDL would first require altering `users.id` (out of scope for v1). The DDL sketch casts `gen_random_uuid()::text`; the Prisma model uses client-side `@default(uuid())` (template style) — either satisfies "uuid PK".
 
@@ -83,7 +83,7 @@ erDiagram
 | `idx_file_uploads_created_at`  | `ON file_uploads (created_at DESC)` | serves the default list sort `createdAt:desc`                                             |
 | `idx_file_uploads_checksum`    | `ON file_uploads (checksum)`        | integrity/audit lookups by checksum                                                       |
 
-(`object_key`'s UNIQUE constraint is automatically backed by a unique b-tree index.)
+(the composite UNIQUE(bucket, object_key) constraint is backed by a unique b-tree index; object keys are unique per bucket, not globally.)
 
 ## 4. Prisma model mapping
 

@@ -48,7 +48,7 @@ model Organization {
 model FileUpload {
   id           String    @id @default(uuid())
   bucket       String    @default("app-uploads")
-  objectKey    String    @unique @map("object_key")
+  objectKey    String    @map("object_key")
   originalName String    @map("original_name")
   mimeType     String    @map("mime_type")
   sizeBytes    Int       @map("size_bytes")
@@ -64,6 +64,7 @@ model FileUpload {
   uploader      User  @relation("FileUploadUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
   deletedByUser User? @relation("FileUploadDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
 
+  @@unique([bucket, objectKey])
   @@index([uploadedBy])
   @@index([createdAt(sort: Desc)])
   @@index([checksum])

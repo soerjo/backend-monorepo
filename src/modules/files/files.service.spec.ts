@@ -410,6 +410,7 @@ describe('FilesService', () => {
       expect(minioService.presignedGetObject).toHaveBeenCalledWith(
         'user-1/7c1b9d0e-2f4a-4c6e-8a0b-9c8d7e6f5a4b-Invoice-42-EU.pdf',
         900,
+        'app-uploads',
       );
       expect(result.url).toBe(
         'http://localhost:9100/app-uploads/key?X-Amz-Expires=900',
@@ -419,6 +420,23 @@ describe('FilesService', () => {
       );
       expect(result.expiresAt.getTime()).toBeLessThanOrEqual(
         after + 15 * 60 * 1000,
+      );
+    });
+
+    it('signs against the file row bucket rather than the configured default', async () => {
+      filesRepository.findById.mockResolvedValue(
+        makeFileRow({ bucket: 'test', objectKey: 'Gemini_x.png' }),
+      );
+      minioService.presignedGetObject.mockResolvedValue(
+        'http://localhost:9100/test/Gemini_x.png?X-Amz-Expires=900',
+      );
+
+      await service.getPresignedUrl('file-1', user);
+
+      expect(minioService.presignedGetObject).toHaveBeenCalledWith(
+        'Gemini_x.png',
+        900,
+        'test',
       );
     });
 

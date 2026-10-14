@@ -370,7 +370,7 @@ Errors: `404 FILE_NOT_FOUND` — unknown id **or** already `DELETED`.
 | Field          | Type   | Notes                                                           |
 | -------------- | ------ | --------------------------------------------------------------- |
 | `id`           | uuid   |                                                                 |
-| `bucket`       | string | `app-uploads` in v1                                             |
+| `bucket`       | string | MinIO bucket holding the object; normally `app-uploads`, but legacy `ORPHAN` rows may point at another bucket (see note below) |
 | `objectKey`    | string | MinIO object key (`{userId}/{uuid}-{sanitizedOriginalName}`)    |
 | `originalName` | string | file name as uploaded                                           |
 | `mimeType`     | string | whitelisted MIME type                                           |
@@ -398,6 +398,14 @@ Sample:
   "updatedAt": "2026-10-13T09:15:00.000Z"
 }
 ```
+
+> **Per-object bucket.** Presigned URLs are signed against each row's own
+> `bucket` column, so a row is never assumed to live in `app-uploads`. Some
+> legacy `ORPHAN` rows historically embedded the real bucket name as a prefix
+> of `objectKey` (e.g. `bucket='app-uploads'` + `objectKey='test/x.png'` for an
+> object that actually lives in bucket `test` at key `x.png`). Migration
+> `20261014093000_normalize_orphan_buckets` normalizes those known prefixes so
+> `bucket` and `objectKey` reflect where the object truly lives.
 
 ## 6. Error catalog
 

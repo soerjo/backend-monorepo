@@ -29,7 +29,7 @@ WHERE "status" = 'ORPHAN'
   AND "object_key" LIKE 'test/%'
   -- Rows whose stripped key already exists are skipped: the duplicate is a
   -- byte-identical copy preserved under its own bucket prefix, and the
-  -- composite UNIQUE(bucket, object_key) added by migration 20261014094500
+  -- composite UNIQUE(bucket, object_key) added by migration 20261014092500
   -- keeps both.
   AND NOT EXISTS (
     SELECT 1 FROM "file_uploads" u2
@@ -46,7 +46,7 @@ WHERE "status" = 'ORPHAN'
   AND "object_key" LIKE 'default-upload/%'
   -- Rows whose stripped key already exists are skipped: the duplicate is a
   -- byte-identical copy preserved under its own bucket prefix, and the
-  -- composite UNIQUE(bucket, object_key) added by migration 20261014094500
+  -- composite UNIQUE(bucket, object_key) added by migration 20261014092500
   -- keeps both.
   AND NOT EXISTS (
     SELECT 1 FROM "file_uploads" u2

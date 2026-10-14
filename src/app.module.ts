@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { WinstonModule } from 'nest-winston';
 import { PrismaModule } from './prisma/prisma.module.js';
@@ -19,6 +20,7 @@ import { validate } from './config/env.validation.js';
     ConfigModule.forRoot({ isGlobal: true, validate }),
     WinstonModule.forRoot(loggerConfig),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     UsersModule,

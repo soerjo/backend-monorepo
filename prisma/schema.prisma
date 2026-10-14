@@ -14,53 +14,59 @@ enum RoleName {
 }
 
 model User {
-  id                    String   @id @default(uuid())
-  email                 String   @unique
-  password              String
-  firstName             String?
-  lastName              String?
-  isActive              Boolean  @default(true)
-  role                  RoleName @default(USER)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  organizationId        String
+  id             String   @id @default(uuid())
+  email          String   @unique
+  password       String
+  firstName      String?
+  lastName       String?
+  isActive       Boolean  @default(true)
+  role           RoleName @default(USER)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organizationId String
 
-  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  fileUploads           FileUpload[]
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fileUploads  FileUpload[] @relation("FileUploadUploader")
+  deletedFiles FileUpload[] @relation("FileUploadDeletedBy")
 
   @@map("users")
 }
 
 model Organization {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String   @unique
-  logoUrl     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  users       User[]
+  users User[]
 
   @@map("organizations")
 }
 
 model FileUpload {
-  id           String   @id @default(uuid())
-  bucket       String   @default("app-uploads")
-  objectKey    String   @unique @map("object_key")
-  originalName String   @map("original_name")
-  mimeType     String   @map("mime_type")
-  sizeBytes    Int      @map("size_bytes")
+  id           String    @id @default(uuid())
+  bucket       String    @default("app-uploads")
+  objectKey    String    @unique @map("object_key")
+  originalName String    @map("original_name")
+  mimeType     String    @map("mime_type")
+  sizeBytes    Int       @map("size_bytes")
   checksum     String
-  status       String   @default("ACTIVE")
-  uploadedBy   String   @map("uploaded_by")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  status       String    @default("ACTIVE")
+  isDeleted    Boolean   @default(false) @map("is_deleted")
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy    String?   @map("deleted_by")
+  uploadedBy   String    @map("uploaded_by")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  uploader User @relation(fields: [uploadedBy], references: [id], onDelete: Restrict)
+  uploader      User  @relation("FileUploadUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
+  deletedByUser User? @relation("FileUploadDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
 
   @@index([uploadedBy])
   @@index([createdAt(sort: Desc)])
   @@index([checksum])
+  @@index([isDeleted, deletedAt])
   @@map("file_uploads")
 }

@@ -411,15 +411,15 @@ Task: five independently-verifiable security fixes for this template. (1) refres
   Outcome: `helmet@^8.3.0` added to dependencies (latest stable v8.x via `npm view helmet`; 8.3.0 confirmed in `node_modules/helmet/package.json`) via one plain `~/.bun/bin/bun install` (bun v1.4.3, "Saved lockfile" → `bun.lock` updated). `src/main.ts` registers `app.use(helmet())` immediately after `app.useLogger(...)` and before `setGlobalPrefix`/request-logging/metrics middleware (`main.ts:20`) — first security middleware in the chain. `bunx bunx`-free gate all passed: `bunx tsc --noEmit` exit 0; `bunx eslint "src/**/*.ts" "test/**/*.ts"` exit 0; `bunx jest src/modules/auth src/common/utils src/modules/metrics src/common/middleware --config jest.config.js` → 28/28 passed; `bun run build` exit 0. Header presence still requires an integration run (`curl -sI`) — compile+install verified only.
 
 - [x] **Step 5 — Configurable CORS via `CORS_ORIGINS` (Fix 5)**
-  Exact files:
-  - Modify `src/config/env.validation.ts` — add `CORS_ORIGINS` as `@IsOptional() @IsString()` (no default; must be a declared field or `ConfigService`/`validate()` drops it).
-  - Modify `src/main.ts` — read `CORS_ORIGINS`; when set, split on `,`, trim, drop empties, and pass as `origin` to `app.enableCors({ origin: [...] })`; when unset/empty, keep current `app.enableCors()` allow-all dev behavior.
-  - `.env.example` and `.example.env` — document `CORS_ORIGINS` (e.g. `CORS_ORIGINS=http://localhost:5173`).
-  - `README.md` — add `CORS_ORIGINS` to the env table.
-  - `AGENTS.md` — add `CORS_ORIGINS` to the environment variables table (this section).
-  Compile-verified; origin allow/deny behavior is integration-only (runtime `curl -H "Origin: ..."` → `access-control-allow-origin`).
-  Verify: `bunx tsc --noEmit`; `bunx eslint "src/**/*.ts" "test/**/*.ts"`; `bun run build`.
-  Outcome: new pure helper `parseCorsOrigins(value: string | null | undefined): string[]` in `src/common/utils/cors-origins.util.ts` (splits on `,`, trims, drops empties/whitespace; unset/empty → `[]`) with spec `src/common/utils/cors-origins.util.spec.ts` (5 tests). `env.validation.ts` declares `CORS_ORIGINS` as `@IsString() @IsOptional()` with no default (required so `ConfigService` sees it — undecclared env vars are dropped by `validate()`). `main.ts` resolves `ConfigService` via `app.get()`, computes `corsOrigins`, and uses `app.enableCors({ origin: corsOrigins })` when the list is non-empty vs plain `app.enableCors()` (allow-all, current dev behavior) otherwise. Docs: `.env.example` and `.example.env` both gained a `CORS_ORIGINS` line (note: `.example.env` lacks MRU env-var names entirely — stale legacy example, only appended the single var per contract; Read tool is denied for it, shell cat used); `README.md` had NO env table (stock Nest starter README) — added a full "Environment variables" section with the table including `CORS_ORIGINS` (plus previously-undocumented GOOGLE_*/FRONTEND_URL rows); `AGENTS.md` env table got the `CORS_ORIGINS` row. Full gate passed: `bunx tsc --noEmit` exit 0; `bunx eslint "src/**/*.ts" "test/**/*.ts"` exit 0; `bunx jest src/modules/auth src/common/utils src/modules/metrics src/common/middleware --config jest.config.js` → 33/33 passed (9 auth + 12 utils + 7 metrics + 5 middleware); `bun run build` exit 0 (via `~/.bun/bin/bun`). Origin allow/deny behavior itself is integration-only (runtime `curl -H "Origin: ..."`).
+   Exact files:
+   - Modify `src/config/env.validation.ts` — add `CORS_ORIGINS` as `@IsOptional() @IsString()` (no default; must be a declared field or `ConfigService`/`validate()` drops it).
+   - Modify `src/main.ts` — read `CORS_ORIGINS`; when set, split on `,`, trim, drop empties, and pass as `origin` to `app.enableCors({ origin: [...] })`; when unset/empty, keep current `app.enableCors()` allow-all dev behavior.
+   - `.env.example` and `.example.env` — document `CORS_ORIGINS` (e.g. `CORS_ORIGINS=http://localhost:5173`).
+   - `README.md` — add `CORS_ORIGINS` to the env table.
+   - `AGENTS.md` — add `CORS_ORIGINS` to the environment variables table (this section).
+   Compile-verified; origin allow/deny behavior is integration-only (runtime `curl -H "Origin: ..."` → `access-control-allow-origin`).
+   Verify: `bunx tsc --noEmit`; `bunx eslint "src/**/*.ts" "test/**/*.ts"`; `bun run build`.
+   Outcome: new pure helper `parseCorsOrigins(value: string | null | undefined): string[]` in `src/common/utils/cors-origins.util.ts` (splits on `,`, trims, drops empties/whitespace; unset/empty → `[]`) with spec `src/common/utils/cors-origins.util.spec.ts` (5 tests). `env.validation.ts` declares `CORS_ORIGINS` as `@IsString() @IsOptional()` with no default (required so `ConfigService` sees it — undecclared env vars are dropped by `validate()`). `main.ts` resolves `ConfigService` via `app.get()`, computes `corsOrigins`, and uses `app.enableCors({ origin: corsOrigins })` when the list is non-empty vs plain `app.enableCors()` (allow-all, current dev behavior) otherwise. Docs: `.env.example` and `.example.env` both gained a `CORS_ORIGINS` line (note: `.example.env` lacks MRU env-var names entirely — stale legacy example, only appended the single var per contract; Read tool is denied for it, shell cat used); `README.md` had NO env table (stock Nest starter README) — added a full "Environment variables" section with the table including `CORS_ORIGINS` (plus previously-undocumented GOOGLE_*/FRONTEND_URL rows); `AGENTS.md` env table got the `CORS_ORIGINS` row. Full gate passed: `bunx tsc --noEmit` exit 0; `bunx eslint "src/**/*.ts" "test/**/*.ts"` exit 0; `bunx jest src/modules/auth src/common/utils src/modules/metrics src/common/middleware --config jest.config.js` → 33/33 passed (9 auth + 12 utils + 7 metrics + 5 middleware); `bun run build` exit 0 (via `~/.bun/bin/bun`). Origin allow/deny behavior itself is integration-only (runtime `curl -H "Origin: ..."`).
 
 ### Risks / notes
 
@@ -429,3 +429,54 @@ Task: five independently-verifiable security fixes for this template. (1) refres
 - Only the pure helper (Step 1) and the mocked `AuthService` paths (Steps 2–3) are genuinely unit-testable without a DB; Step 4 (helmet headers) and Step 5 (CORS origin behavior) are compile-verified with integration smoke tests required to prove behavior.
 - `bun run lint` is NOT a gate (it applies `--fix`); use `bunx eslint "src/**/*.ts" "test/**/*.ts"` check-only, matching the CI workflow.
 - No Prisma schema change is involved, so `bunx prisma generate` is not required for these fixes.
+
+## Implementation checklist: cleanup batch (vercel.json, deps, dead code, CI)
+
+Task: cleanup batch including deleting `vercel.json`, removing unused devDependencies (`@types/bcryptjs`, `source-map-support`), bumping `passport` and `ts-node`, deleting dead code (`src/common/constant.ts`), changing `package.json` lint script to check-only, adding `bun audit` to CI, and creating `.github/dependabot.yml`.
+
+### Locked decisions
+
+| Decision                | Choice                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| Lint script change      | `lint` script in `package.json` changed from `eslint "{src,apps,libs,test}/**/*.ts" --fix` to check-only (`eslint "{src,apps,libs,test}/**/*.ts"`) so CI and local lint match |
+| Audit step in CI        | `bun audit` with `continue-on-error: true` placed immediately after `bun install` in the CI workflow |
+| Dependabot config       | `.github/dependabot.yml` configured for the `npm` ecosystem, checking weekly                        |
+
+### Ordered steps (all pending)
+
+- [x] **Step 1 — Delete `vercel.json`**
+  Delete the root `vercel.json` configuration file.
+  Verify: file does not exist.
+  Outcome: `vercel.json` deleted successfully; `bunx tsc --noEmit` exited clean.
+
+- [x] **Step 2 — Remove unused devDependencies `@types/bcryptjs` and `source-map-support`**
+  Run `bun remove @types/bcryptjs source-map-support` (or edit `package.json` and run `bun install`).
+  Verify: `bunx tsc --noEmit`.
+  Outcome: `@types/bcryptjs` and `source-map-support` removed via `bun remove`; `bun.lock` updated; `bunx tsc --noEmit` exited clean.
+
+- [x] **Step 3 — Bump `passport` and `ts-node` versions**
+  Update `passport` and `ts-node` in `package.json`.
+  Verify: `bunx tsc --noEmit`.
+  Outcome: `passport` (`^0.7.0`) and `ts-node` (`^10.9.2`) verified at their latest stable published versions (since `0.8.0` and `10.9.3` do not exist on npm); `bun install` run successfully; `bunx tsc --noEmit` exited clean.
+
+- [x] **Step 4 — Delete `src/common/constant.ts`**
+  Delete `src/common/constant.ts` (contains unused `UserRole` enum, zero imports across the repo).
+  Verify: `git status`, `bunx tsc --noEmit`.
+  Outcome: `src/common/constant.ts` deleted successfully; `bunx tsc --noEmit` exited clean.
+
+- [x] **Step 5 — Change `package.json` script `lint` to check-only**
+  Remove `--fix` from the `lint` script in `package.json`.
+  Verify: `npm run lint` (or `bun run lint`) runs check-only without modifying files.
+  Outcome: `lint` script in `package.json` updated to check-only (removed `--fix`); `bun run lint` exited 0 with no file modifications.
+
+- [x] **Step 6 — Add `bun audit` to CI and create `.github/dependabot.yml`**
+  - Modify `.github/workflows/ci.yml` to add `- name: Audit dependencies\n  run: bun audit\n  continue-on-error: true` right after `bun install` / `npm ci` (or bun setup step).
+  - Create `.github/dependabot.yml` (`version: 2`, updates package-ecosystem: `"npm"`, interval: `weekly`).
+  Verify: YAML validation / workflow structure.
+  Outcome: `bun audit` step added to all three jobs in `.github/workflows/ci.yml` immediately after `bun install --frozen-lockfile`; `.github/dependabot.yml` created with npm ecosystem weekly updates and request limit 10; both files validated successfully with `python3 -c "import yaml; ..."`.
+
+### Final gate
+- `bunx tsc --noEmit`
+- `bunx eslint "src/**/*.ts" "test/**/*.ts"`
+- `bun run build`
+- `git status clean`

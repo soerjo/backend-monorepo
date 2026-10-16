@@ -5,9 +5,6 @@ services:
   postgres:
     ports: !override
       - '55432:5432'
-  redis:
-    ports: !override
-      - '6380:6379'
   prometheus:
     ports: !override
       - '39090:9090'

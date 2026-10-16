@@ -36,13 +36,10 @@ Create a `.env` file before running the app. Key variables:
 | `UMS_JWT_PUBLIC_KEY`     | Yes*     | —             | UMS JWT Public Key (PEM format, literal `\n` supported)                           |
 | `UMS_JWT_PUBLIC_KEY_PATH`| Yes*     | —             | Path to UMS JWT Public Key PEM file                                               |
 | `CORS_ORIGINS`           | No       | —             | Comma-separated allowed origins; unset/empty enables CORS for all origins (dev)   |
-| `MINIO_ENDPOINT`         | No       | `localhost`   | MinIO host                                                                        |
-| `MINIO_PORT`             | No       | `9000`        | MinIO port                                                                        |
-| `MINIO_USE_SSL`          | No       | `false`       | Use SSL for MinIO connection                                                      |
-| `MINIO_ACCESS_KEY`       | No       | `minioadmin`  | MinIO access key                                                                  |
-| `MINIO_SECRET_KEY`       | No       | `minioadmin`  | MinIO secret key                                                                  |
-| `MINIO_BUCKET`           | No       | `cms-media`   | MinIO bucket name                                                                 |
-| `MEDIA_PUBLIC_URL_BASE`  | No       | —             | Optional public URL base for media assets                                         |
+| `FILE_SERVICE_URL`       | Yes      | —             | File service API URL (e.g. http://localhost:3100/api)             |
+| `FILE_SERVICE_EMAIL`     | Yes      | —             | File service service-account email                                |
+| `FILE_SERVICE_PASSWORD`  | Yes      | —             | File service service-account password                             |
+| `FILE_SERVICE_TIMEOUT_MS`| No       | `10000`       | File service request timeout in ms                                |
 
 *\* Exactly one of `UMS_JWT_PUBLIC_KEY` or `UMS_JWT_PUBLIC_KEY_PATH` must be provided.*
 

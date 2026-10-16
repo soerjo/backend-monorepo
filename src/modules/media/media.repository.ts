@@ -6,15 +6,12 @@ export class MediaRepository {
   constructor(private prisma: PrismaService) {}
 
   async create(data: {
-    fileName: string;
+    fileId: string;
+    objectKey: string;
     originalName: string;
     mimeType: string;
     sizeBytes: number;
-    storageKey: string;
-    url: string;
     altText?: string;
-    width?: number;
-    height?: number;
     uploadedById: string;
   }) {
     return this.prisma.mediaAsset.create({ data });
@@ -38,9 +35,9 @@ export class MediaRepository {
     return item;
   }
 
-  async findByStorageKey(storageKey: string) {
+  async findByObjectKey(objectKey: string) {
     return this.prisma.mediaAsset.findUnique({
-      where: { storageKey },
+      where: { objectKey },
     });
   }
 

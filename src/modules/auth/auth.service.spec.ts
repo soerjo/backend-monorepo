@@ -1,62 +1,152 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcryptjs';
+import { UserStatus } from '@prisma/client';
+import type { User } from '@prisma/client';
 import { UsersRepository } from '../users/users.repository.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AuthService } from './auth.service.js';
+import { hashPassword } from '../../common/utils/password.util.js';
+import { sha256Hex } from '../../common/utils/hash.util.js';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
+
+interface FakeSession {
+  id: string;
+  userId: string;
+  refreshHash: string;
+  family: string;
+  userAgent: string | null;
+  ip: string | null;
+  expiresAt: Date;
+  revokedAt: Date | null;
+  replacedByHash: string | null;
+}
+
+interface SessionUpdateArgs {
+  where: { id: string };
+  data: Partial<FakeSession>;
+}
+
+interface SessionUpdateManyArgs {
+  where: { family?: string; userId?: string; revokedAt: null };
+  data: { revokedAt: Date };
+}
 
 describe('AuthService', () => {
   let service: AuthService;
+  let sessions: FakeSession[];
   let findById: jest.Mock;
   let findByEmail: jest.Mock;
-  let verify: jest.Mock;
-  let sign: jest.Mock;
+  let updateManySession: jest.Mock;
+  let updateSession: jest.Mock;
+  let createUser: jest.Mock;
+  let userRoleFindMany: jest.Mock;
+  let orgMemberFindMany: jest.Mock;
 
-  const activeUser = {
+  const fullUser = {
     id: 'user-1',
     email: 'user@example.com',
-    firstName: 'Ada',
-    lastName: 'Lovelace',
-    role: 'ADMIN',
-    organizationId: 'org-1',
-    isActive: true,
-  };
+    name: 'Ada Lovelace',
+    passwordHash: '',
+    status: UserStatus.ACTIVE,
+    emailVerifiedAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as User;
 
-  const expectedAuthUser = {
+  const authUser: AuthUser = {
     id: 'user-1',
     email: 'user@example.com',
-    firstName: 'Ada',
-    lastName: 'Lovelace',
-    role: 'ADMIN',
-    organizationId: 'org-1',
+    name: 'Ada Lovelace',
+    roles: ['ums:admin'],
+    orgs: ['pesanggrahan'],
   };
 
   beforeEach(() => {
+    sessions = [];
     findById = jest.fn();
     findByEmail = jest.fn();
-    verify = jest.fn();
-    sign = jest
-      .fn()
-      .mockReturnValueOnce('new-access')
-      .mockReturnValueOnce('new-refresh');
+    createUser = jest.fn();
+    userRoleFindMany = jest.fn().mockResolvedValue([]);
+    orgMemberFindMany = jest.fn().mockResolvedValue([]);
+
+    const prisma = {
+      session: {
+        create: jest.fn(({ data }: { data: FakeSession }) => {
+          const session: FakeSession = {
+            id: `session-${sessions.length + 1}`,
+            userId: data.userId,
+            refreshHash: data.refreshHash,
+            family: data.family,
+            userAgent: data.userAgent ?? null,
+            ip: data.ip ?? null,
+            expiresAt: data.expiresAt,
+            revokedAt: null,
+            replacedByHash: null,
+          };
+          sessions.push(session);
+          return Promise.resolve(session);
+        }),
+        findUnique: jest.fn(({ where }: { where: { refreshHash: string } }) =>
+          Promise.resolve(
+            sessions.find((s) => s.refreshHash === where.refreshHash) ?? null,
+          ),
+        ),
+        update: jest.fn(({ where, data }: SessionUpdateArgs) => {
+          const session = sessions.find((s) => s.id === where.id);
+          if (session) {
+            Object.assign(session, data);
+          }
+          return Promise.resolve(session);
+        }),
+        updateMany: jest.fn(({ where, data }: SessionUpdateManyArgs) => {
+          let count = 0;
+          for (const session of sessions) {
+            const matchesFamily = where.family
+              ? session.family === where.family
+              : true;
+            const matchesUser = where.userId
+              ? session.userId === where.userId
+              : true;
+            const matchesActive = session.revokedAt === null;
+            if (matchesFamily && matchesUser && matchesActive) {
+              session.revokedAt = data.revokedAt;
+              count += 1;
+            }
+          }
+          return Promise.resolve({ count });
+        }),
+      },
+      userRole: { findMany: userRoleFindMany },
+      orgMember: { findMany: orgMemberFindMany },
+      user: {
+        create: createUser,
+        findUnique: jest.fn(),
+      },
+    };
 
     const configService = {
       get: jest.fn((key: string) =>
-        key === 'JWT_REFRESH_SECRET'
-          ? 'refresh-secret'
+        key === 'JWT_ACCESS_EXPIRATION'
+          ? '15m'
           : key === 'JWT_REFRESH_EXPIRATION'
-            ? '7d'
+            ? '30d'
             : undefined,
       ),
     };
 
+    const jwtService = {
+      sign: jest.fn(() => 'signed-access-token'),
+      verify: jest.fn(),
+    };
+
+    updateManySession = prisma.session.updateMany;
+    updateSession = prisma.session.update;
     service = new AuthService(
       { findById, findByEmail } as unknown as UsersRepository,
-      { verify, sign } as unknown as JwtService,
+      jwtService as unknown as JwtService,
       configService as unknown as ConfigService,
-      {} as unknown as PrismaService,
+      prisma as unknown as PrismaService,
     );
   });
 
@@ -65,119 +155,205 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('signs access claims with sub + email and keeps refresh on HS256', () => {
-      const result = service.login(expectedAuthUser as unknown as AuthUser);
+    it('stores only the sha256 hash of the refresh token', async () => {
+      const result = await service.login(authUser);
 
-      expect(sign).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({
-          id: 'user-1',
-          sub: 'user-1',
-          email: 'user@example.com',
-        }),
-      );
-      expect(sign).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({ sub: 'user-1', email: 'user@example.com' }),
-        expect.objectContaining({
-          secret: 'refresh-secret',
-          algorithm: 'HS256',
-        }),
-      );
-      expect(result).toEqual({
-        accessToken: 'new-access',
-        refreshToken: 'new-refresh',
-      });
+      expect(result.accessToken).toBe('signed-access-token');
+      expect(result.user).toEqual(authUser);
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].refreshHash).toBe(sha256Hex(result.refreshToken));
+      expect(sessions[0].refreshHash).not.toBe(result.refreshToken);
     });
   });
 
-  describe('refreshTokens', () => {
-    it('issues a new token pair for a valid refresh token', async () => {
-      verify.mockReturnValue({ id: 'user-1' });
-      findById.mockResolvedValue(activeUser);
+  describe('refresh rotation', () => {
+    it('rotates the token and marks the old session as replaced', async () => {
+      findById.mockResolvedValue(fullUser);
+      const login = await service.login(authUser);
 
-      const tokens = await service.refreshTokens('valid-refresh-token');
+      const rotated = await service.refresh(login.refreshToken);
 
-      expect(verify).toHaveBeenCalledWith('valid-refresh-token', {
-        secret: 'refresh-secret',
-      });
-      expect(tokens).toEqual({
-        accessToken: 'new-access',
-        refreshToken: 'new-refresh',
-      });
+      const oldSession = sessions.find(
+        (s) => s.refreshHash === sha256Hex(login.refreshToken),
+      );
+      expect(oldSession?.replacedByHash).toBe(sha256Hex(rotated.refreshToken));
+      expect(oldSession?.revokedAt).toBeInstanceOf(Date);
+      expect(rotated.refreshToken).not.toBe(login.refreshToken);
+      expect(sessions).toHaveLength(2);
+      expect(updateSession).toHaveBeenCalled();
     });
 
-    it('rejects an expired or tampered refresh token', async () => {
-      verify.mockImplementation(() => {
-        throw new Error('jwt expired');
-      });
+    it('keeps the rotated session in the same family', async () => {
+      findById.mockResolvedValue(fullUser);
+      const login = await service.login(authUser);
 
-      await expect(service.refreshTokens('bad-token')).rejects.toBeInstanceOf(
+      await service.refresh(login.refreshToken);
+
+      const families = new Set(sessions.map((s) => s.family));
+      expect(families.size).toBe(1);
+    });
+
+    it('detects reuse of a rotated token and revokes the whole family', async () => {
+      findById.mockResolvedValue(fullUser);
+      const login = await service.login(authUser);
+      await service.refresh(login.refreshToken);
+
+      await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(
         UnauthorizedException,
       );
-      expect(findById).not.toHaveBeenCalled();
+
+      const reuseCall = (
+        updateManySession.mock.calls[0] as [SessionUpdateManyArgs]
+      )[0];
+      expect(reuseCall.where.revokedAt).toBeNull();
+      expect(sessions.every((s) => s.revokedAt instanceof Date)).toBe(true);
+    });
+
+    it('rejects an unknown refresh token', async () => {
+      await expect(service.refresh('not-a-real-token')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    });
+
+    it('rejects an expired session and revokes it', async () => {
+      const login = await service.login(authUser);
+      const session = sessions[0];
+      session.expiresAt = new Date(Date.now() - 1000);
+
+      await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(session.revokedAt).toBeInstanceOf(Date);
+    });
+
+    it('revokes the family when the user is no longer active', async () => {
+      findById.mockResolvedValue({ ...fullUser, status: UserStatus.BLOCKED });
+      const login = await service.login(authUser);
+
+      await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(sessions[0].revokedAt).toBeInstanceOf(Date);
     });
 
     it('rejects when the user no longer exists', async () => {
-      verify.mockReturnValue({ id: 'user-1' });
       findById.mockResolvedValue(null);
+      const login = await service.login(authUser);
 
-      await expect(service.refreshTokens('token')).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
-    });
-
-    it('rejects an inactive user', async () => {
-      verify.mockReturnValue({ id: 'user-1' });
-      findById.mockResolvedValue({ ...activeUser, isActive: false });
-
-      await expect(service.refreshTokens('token')).rejects.toBeInstanceOf(
+      await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(
         UnauthorizedException,
       );
     });
   });
 
-  describe('validateUser (login path)', () => {
-    it('rejects an inactive user', async () => {
-      findByEmail.mockResolvedValue({ ...activeUser, isActive: false });
+  describe('logout', () => {
+    it('revokes the session matching the refresh token', async () => {
+      const login = await service.login(authUser);
+
+      await service.logout(login.refreshToken);
+
+      expect(sessions[0].revokedAt).toBeInstanceOf(Date);
+    });
+
+    it('is a no-op for an unknown token', async () => {
+      await expect(service.logout('unknown')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('logoutAll', () => {
+    it('revokes every active session for the user', async () => {
+      await service.login(authUser);
+      await service.login(authUser);
+
+      await service.logoutAll(authUser.id);
+
+      expect(sessions.every((s) => s.revokedAt instanceof Date)).toBe(true);
+    });
+  });
+
+  describe('validateUser', () => {
+    it('returns roles/orgs for valid credentials', async () => {
+      const passwordHash = await hashPassword('secret-password');
+      findByEmail.mockResolvedValue({ ...fullUser, passwordHash });
+      userRoleFindMany.mockResolvedValue([{ role: { name: 'ums:admin' } }]);
+      orgMemberFindMany.mockResolvedValue([
+        { organization: { name: 'pesanggrahan' } },
+      ]);
 
       await expect(
-        service.validateUser('user@example.com', 'secret'),
+        service.validateUser('user@example.com', 'secret-password'),
+      ).resolves.toEqual(authUser);
+    });
+
+    it('rejects a blocked user', async () => {
+      findByEmail.mockResolvedValue({
+        ...fullUser,
+        status: UserStatus.BLOCKED,
+      });
+
+      await expect(
+        service.validateUser('user@example.com', 'secret-password'),
       ).resolves.toBeNull();
     });
 
-    it('returns the auth user for an active user with valid credentials', async () => {
-      const password = await bcrypt.hash('secret', 4);
-      findByEmail.mockResolvedValue({ ...activeUser, password });
+    it('rejects a wrong password', async () => {
+      const passwordHash = await hashPassword('secret-password');
+      findByEmail.mockResolvedValue({ ...fullUser, passwordHash });
 
       await expect(
-        service.validateUser('user@example.com', 'secret'),
-      ).resolves.toEqual(expectedAuthUser);
-    });
-
-    it('rejects an active user with invalid credentials', async () => {
-      const password = await bcrypt.hash('secret', 4);
-      findByEmail.mockResolvedValue({ ...activeUser, password });
-
-      await expect(
-        service.validateUser('user@example.com', 'wrong'),
+        service.validateUser('user@example.com', 'wrong-password'),
       ).resolves.toBeNull();
     });
   });
 
-  describe('validateUserById (jwt path)', () => {
-    it('rejects an inactive user', async () => {
-      findById.mockResolvedValue({ ...activeUser, isActive: false });
+  describe('register', () => {
+    it('hashes the password and auto-verifies the email', async () => {
+      findByEmail.mockResolvedValue(null);
+      createUser.mockImplementation(
+        ({ data }: { data: { passwordHash: string; email: string } }) =>
+          Promise.resolve({
+            ...fullUser,
+            id: 'new-user',
+            email: data.email,
+            passwordHash: data.passwordHash,
+          }),
+      );
 
-      await expect(service.validateUserById('user-1')).resolves.toBeNull();
+      const result = await service.register({
+        email: 'user@example.com',
+        password: 'secret-password',
+        name: 'Ada',
+      });
+
+      interface CreateUserArgs {
+        data: {
+          email: string;
+          name?: string;
+          status: UserStatus;
+          emailVerifiedAt: Date;
+          passwordHash: string;
+        };
+      }
+      const createCall = (createUser.mock.calls[0] as [CreateUserArgs])[0];
+      expect(createCall.data.email).toBe('user@example.com');
+      expect(createCall.data.name).toBe('Ada');
+      expect(createCall.data.status).toBe(UserStatus.ACTIVE);
+      expect(createCall.data.emailVerifiedAt).toBeInstanceOf(Date);
+      expect(typeof createCall.data.passwordHash).toBe('string');
+      expect(createCall.data.passwordHash).not.toBe('secret-password');
+      expect(result).not.toHaveProperty('passwordHash');
+      expect(result.email).toBe('user@example.com');
     });
 
-    it('returns the auth user for an active user', async () => {
-      findById.mockResolvedValue(activeUser);
+    it('rejects a duplicate email', async () => {
+      findByEmail.mockResolvedValue(fullUser);
 
-      await expect(service.validateUserById('user-1')).resolves.toEqual(
-        expectedAuthUser,
-      );
+      await expect(
+        service.register({
+          email: 'user@example.com',
+          password: 'secret-password',
+        }),
+      ).rejects.toThrow('Email already in use');
     });
   });
 });

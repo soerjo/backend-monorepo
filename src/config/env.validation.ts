@@ -27,12 +27,12 @@ class EnvironmentVariables {
   DATABASE_URL!: string;
 
   @IsString()
-  @IsNotEmpty()
-  JWT_ACCESS_SECRET!: string;
+  @IsOptional()
+  JWT_ACCESS_SECRET?: string;
 
   @IsString()
-  @IsNotEmpty()
-  JWT_REFRESH_SECRET!: string;
+  @IsOptional()
+  JWT_REFRESH_SECRET?: string;
 
   @IsString()
   @IsOptional()
@@ -51,12 +51,12 @@ class EnvironmentVariables {
   JWT_REFRESH_EXPIRATION: string = '7d';
 
   @IsString()
-  @IsNotEmpty()
-  GOOGLE_CLIENT_ID!: string;
+  @IsOptional()
+  GOOGLE_CLIENT_ID?: string;
 
   @IsString()
-  @IsNotEmpty()
-  GOOGLE_CLIENT_SECRET!: string;
+  @IsOptional()
+  GOOGLE_CLIENT_SECRET?: string;
 
   @IsString()
   @IsOptional()
@@ -70,6 +70,18 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   CORS_ORIGINS?: string;
+
+  @IsString()
+  @IsOptional()
+  UMS_ADMIN_EMAIL?: string;
+
+  @IsString()
+  @IsOptional()
+  UMS_ADMIN_PASSWORD?: string;
+
+  @IsString()
+  @IsOptional()
+  UMS_ADMIN_NAME?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

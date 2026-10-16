@@ -1,40 +1,62 @@
 import { Injectable } from '@nestjs/common';
 import { UsersRepository } from './users.repository.js';
-import { CreateUserDto } from './dto/create-user.dto.js';
+import { AssignRolesDto } from './dto/assign-roles.dto.js';
+import { ListUsersDto } from './dto/list-users.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 
 @Injectable()
 export class UsersService {
   constructor(private usersRepository: UsersRepository) {}
 
-  async findAll() {
-    return this.usersRepository.findAll();
-  }
+  async findAll(query: ListUsersDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const { data, total } = await this.usersRepository.findAll({
+      skip: (page - 1) * limit,
+      take: limit,
+    });
 
-  async findById(id: string) {
-    const user = await this.usersRepository.findById(id);
     return {
-      id: user.id,
-      email: user.email,
-      userName: user.firstName + ' ' + user.lastName,
-      organizationName: user.organization.name,
-      role: user.role,
-      organizationId: user.organization.id,
+      data: data.map((user) => this.toPublic(user)),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
-  async create(dto: CreateUserDto) {
-    const user = await this.usersRepository.create(dto);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password, ...result } = user;
-    return result;
+  async findById(id: string) {
+    return this.toPublic(await this.usersRepository.findByIdDetailed(id));
   }
 
   async update(id: string, dto: UpdateUserDto) {
-    return this.usersRepository.update(id, dto as { [key: string]: unknown });
+    await this.usersRepository.update(id, dto);
+    return this.findById(id);
   }
 
-  async remove(id: string) {
-    return this.usersRepository.remove(id);
+  async assignRoles(id: string, dto: AssignRolesDto) {
+    return this.toPublic(await this.usersRepository.assignRoles(id, dto.roles));
+  }
+
+  private toPublic(
+    user: Awaited<ReturnType<UsersRepository['findByIdDetailed']>>,
+  ) {
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      status: user.status,
+      emailVerifiedAt: user.emailVerifiedAt,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      roles: user.userRoles.map((userRole) => userRole.role.name),
+      orgs: user.orgMembers.map((member) => ({
+        id: member.organization.id,
+        name: member.organization.name,
+        role: member.role,
+      })),
+    };
   }
 }

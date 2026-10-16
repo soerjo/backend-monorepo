@@ -1,42 +1,48 @@
-import { Controller, Get, Patch, Delete, Param, Body } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Patch,
+  Post,
+  Param,
+  Body,
+  Query,
+} from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { UsersService } from './users.service.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
+import { AssignRolesDto } from './dto/assign-roles.dto.js';
+import { ListUsersDto } from './dto/list-users.dto.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
-import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { UMS_ADMIN_ROLE } from '../auth/auth.constants.js';
 
 @ApiTags('Users')
 @ApiBearerAuth()
+@Roles(UMS_ADMIN_ROLE)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Get('me')
-  async getProfile(@CurrentUser('id') userId: string) {
-    return this.usersService.findById(userId);
-  }
-
   @Get()
-  @Roles('ADMIN')
-  async findAll() {
-    return this.usersService.findAll();
+  @ApiOperation({ summary: 'List users (paginated)' })
+  async findAll(@Query() query: ListUsersDto) {
+    return this.usersService.findAll(query);
   }
 
   @Get(':id')
-  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Get a user by id' })
   async findOne(@Param('id') id: string) {
     return this.usersService.findById(id);
   }
 
   @Patch(':id')
-  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Update a user name and/or status' })
   async update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.update(id, dto);
   }
 
-  @Delete(':id')
-  @Roles('ADMIN')
-  async remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
+  @Post(':id/roles')
+  @ApiOperation({ summary: 'Replace the set of roles assigned to a user' })
+  async assignRoles(@Param('id') id: string, @Body() dto: AssignRolesDto) {
+    return this.usersService.assignRoles(id, dto);
   }
 }

@@ -5,14 +5,43 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'node:crypto';
+import { $Enums } from '@prisma/client';
+import type { User } from '@prisma/client';
 import { UsersRepository } from '../users/users.repository.js';
-import * as bcrypt from 'bcryptjs';
-// import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
-import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
-import type { RegisterDto } from './dto/register.dto.js';
-import { $Enums, User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { parseDurationToSeconds } from '../../common/utils/token-expiry.util.js';
+import {
+  hashPassword,
+  verifyPassword,
+} from '../../common/utils/password.util.js';
+import {
+  generateOpaqueToken,
+  sha256Hex,
+} from '../../common/utils/hash.util.js';
+import { JWT_AZP } from './auth.constants.js';
+import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
+import type { RegisterDto } from './dto/register.dto.js';
+
+export interface RequestMeta {
+  userAgent?: string | null;
+  ip?: string | null;
+}
+
+export interface IssuedTokens {
+  accessToken: string;
+  refreshToken: string;
+  user: AuthUser;
+}
+
+export interface PublicUser {
+  id: string;
+  email: string;
+  name: string | null;
+  status: $Enums.UserStatus;
+  emailVerifiedAt: Date | null;
+  createdAt: Date;
+}
 
 @Injectable()
 export class AuthService {
@@ -23,186 +52,250 @@ export class AuthService {
     private prisma: PrismaService,
   ) {}
 
+  private get accessTokenTtlSeconds(): number {
+    return parseDurationToSeconds(
+      this.configService.get<string>('JWT_ACCESS_EXPIRATION') ?? '15m',
+    );
+  }
+
+  get refreshTokenTtlSeconds(): number {
+    return parseDurationToSeconds(
+      this.configService.get<string>('JWT_REFRESH_EXPIRATION') ?? '30d',
+    );
+  }
+
+  private async loadRoles(userId: string): Promise<string[]> {
+    const rows = await this.prisma.userRole.findMany({
+      where: { userId },
+      select: { role: { select: { name: true } } },
+    });
+    return rows.map((row) => row.role.name);
+  }
+
+  private async loadOrgs(userId: string): Promise<string[]> {
+    const rows = await this.prisma.orgMember.findMany({
+      where: { userId },
+      select: { organization: { select: { name: true } } },
+    });
+    return rows.map((row) => row.organization.name);
+  }
+
+  private async toAuthUser(user: User): Promise<AuthUser> {
+    const [roles, orgs] = await Promise.all([
+      this.loadRoles(user.id),
+      this.loadOrgs(user.id),
+    ]);
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      roles,
+      orgs,
+    };
+  }
+
+  private toPublicUser(user: User): PublicUser {
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      status: user.status,
+      emailVerifiedAt: user.emailVerifiedAt,
+      createdAt: user.createdAt,
+    };
+  }
+
+  /**
+   * Signs a stateless RS256 access token carrying roles/orgs as claims so
+   * downstream services can authorize without calling UMS.
+   */
+  buildAccessToken(user: AuthUser): string {
+    return this.jwtService.sign({
+      sub: user.id,
+      email: user.email,
+      name: user.name,
+      roles: user.roles,
+      orgs: user.orgs,
+      azp: JWT_AZP,
+    });
+  }
+
+  private async createSession(
+    userId: string,
+    family: string,
+    meta: RequestMeta,
+  ): Promise<{ refreshToken: string; refreshHash: string; expiresAt: Date }> {
+    const refreshToken = generateOpaqueToken();
+    const refreshHash = sha256Hex(refreshToken);
+    const expiresAt = new Date(Date.now() + this.refreshTokenTtlSeconds * 1000);
+
+    await this.prisma.session.create({
+      data: {
+        userId,
+        refreshHash,
+        family,
+        userAgent: meta.userAgent ?? null,
+        ip: meta.ip ?? null,
+        expiresAt,
+      },
+    });
+
+    return { refreshToken, refreshHash, expiresAt };
+  }
+
+  private async revokeFamily(family: string): Promise<void> {
+    await this.prisma.session.updateMany({
+      where: { family, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
   async validateUser(
     email: string,
     password: string,
   ): Promise<AuthUser | null> {
     const user = await this.usersRepository.findByEmail(email);
-    if (
-      user &&
-      user.isActive &&
-      (await bcrypt.compare(password, user.password))
-    ) {
-      // const { password, ...result } = user;
-      return {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        organizationId: user.organizationId,
-      };
+    if (!user || user.status !== $Enums.UserStatus.ACTIVE) {
+      return null;
     }
 
-    return null;
+    const passwordMatches = await verifyPassword(user.passwordHash, password);
+    if (!passwordMatches) {
+      return null;
+    }
+
+    return this.toAuthUser(user);
   }
 
   async validateUserById(id: string): Promise<AuthUser | null> {
-    const user = await this.usersRepository.findById(id);
-    if (!user || !user.isActive) return null;
-
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      organizationId: user.organizationId,
-    };
+    const user = await this.usersRepository.findById(id).catch(() => null);
+    if (!user || user.status !== $Enums.UserStatus.ACTIVE) {
+      return null;
+    }
+    return this.toAuthUser(user);
   }
 
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto): Promise<PublicUser> {
     const existingUser = await this.usersRepository.findByEmail(dto.email);
     if (existingUser) {
       throw new BadRequestException('Email already in use');
     }
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    const user = await this.prisma.$transaction(async (tx) => {
-      const organization = await tx.organization.create({
-        data: {
-          name: `Organization of ${dto.email}`,
-          slug: `org-${dto.email}`,
-        },
-      });
+    const passwordHash = await hashPassword(dto.password);
 
-      return tx.user.create({
-        data: {
-          email: dto.email,
-          password: hashedPassword,
-          firstName: dto.firstName ?? '',
-          lastName: dto.lastName ?? '',
-          organizationId: organization.id,
-          role: $Enums.RoleName.ADMIN,
-        },
-      });
+    // v1 has no SMTP: registration is auto-verified.
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        passwordHash,
+        name: dto.name ?? null,
+        status: $Enums.UserStatus.ACTIVE,
+        emailVerifiedAt: new Date(),
+      },
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password, ...result } = user;
-    return result;
+    return this.toPublicUser(user);
   }
 
-  async validateGoogleUser(
-    email: string,
-    firstName: string,
-    lastName: string,
-    organizationId: string,
-  ): Promise<AuthUser> {
-    let user: User = (await this.usersRepository.findByEmail(email)) as User;
-    if (!user) {
-      user = await this.usersRepository.create({
-        email,
-        password: '',
-        firstName,
-        lastName,
-        organizationId,
-        // roleId,
-      });
+  async login(user: AuthUser, meta: RequestMeta = {}): Promise<IssuedTokens> {
+    const { refreshToken } = await this.createSession(
+      user.id,
+      randomUUID(),
+      meta,
+    );
+
+    return {
+      accessToken: this.buildAccessToken(user),
+      refreshToken,
+      user,
+    };
+  }
+
+  async refresh(
+    rawToken: string,
+    meta: RequestMeta = {},
+  ): Promise<IssuedTokens> {
+    const refreshHash = sha256Hex(rawToken);
+    const session = await this.prisma.session.findUnique({
+      where: { refreshHash },
+    });
+
+    if (!session) {
+      throw new UnauthorizedException('Invalid refresh token');
     }
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      organizationId: user.organizationId,
-    };
-  }
 
-  login(payload: AuthUser) {
-    const claims = { ...payload, sub: payload.id, email: payload.email };
+    // Reuse detection: a rotated or revoked token presented again means the
+    // token was stolen — burn every session in the family.
+    if (session.revokedAt || session.replacedByHash) {
+      await this.revokeFamily(session.family);
+      throw new UnauthorizedException('Refresh token reuse detected');
+    }
 
-    return {
-      accessToken: this.jwtService.sign(claims),
-      refreshToken: this.jwtService.sign(claims, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET')!,
-        algorithm: 'HS256',
-        expiresIn: parseDurationToSeconds(
-          this.configService.get<string>('JWT_REFRESH_EXPIRATION')!,
-        ),
-      }),
-    };
-  }
-
-  async refreshTokens(refreshToken: string) {
-    let payload: AuthUser;
-    try {
-      payload = this.jwtService.verify<AuthUser>(refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET')!,
+    if (session.expiresAt.getTime() <= Date.now()) {
+      await this.prisma.session.update({
+        where: { id: session.id },
+        data: { revokedAt: new Date() },
       });
-    } catch {
-      throw new UnauthorizedException('Invalid or expired refresh token');
+      throw new UnauthorizedException('Refresh token expired');
     }
 
     const user = await this.usersRepository
-      .findById(payload.id)
+      .findById(session.userId)
       .catch(() => null);
-    if (!user) {
-      throw new UnauthorizedException('User no longer exists');
-    }
-    if (!user.isActive) {
-      throw new UnauthorizedException('User account is inactive');
+    if (!user || user.status !== $Enums.UserStatus.ACTIVE) {
+      await this.revokeFamily(session.family);
+      throw new UnauthorizedException('User is not active');
     }
 
-    const authUser: AuthUser = {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      organizationId: user.organizationId,
+    const authUser = await this.toAuthUser(user);
+    const rotated = await this.createSession(user.id, session.family, meta);
+
+    await this.prisma.session.update({
+      where: { id: session.id },
+      data: {
+        revokedAt: new Date(),
+        replacedByHash: rotated.refreshHash,
+      },
+    });
+
+    return {
+      accessToken: this.buildAccessToken(authUser),
+      refreshToken: rotated.refreshToken,
+      user: authUser,
     };
-
-    return this.login(authUser);
   }
 
-  async setPassword(userId: string, newPassword: string) {
-    const user = await this.usersRepository.findByEmail(
-      (await this.usersRepository.findById(userId)).email,
-    );
-    if (!user) {
-      throw new UnauthorizedException('User not found');
+  async logout(rawToken: string): Promise<void> {
+    const refreshHash = sha256Hex(rawToken);
+    const session = await this.prisma.session.findUnique({
+      where: { refreshHash },
+    });
+
+    if (session && !session.revokedAt) {
+      await this.prisma.session.update({
+        where: { id: session.id },
+        data: { revokedAt: new Date() },
+      });
     }
-    if (user.password) {
-      throw new BadRequestException(
-        'Password already set. Use change password instead.',
-      );
-    }
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await this.usersRepository.updatePassword(userId, hashedPassword);
-    return { message: 'Password set successfully' };
   }
 
-  async changePassword(
-    userId: string,
-    currentPassword: string,
-    newPassword: string,
-  ) {
-    const user = await this.usersRepository.findByEmail(
-      (await this.usersRepository.findById(userId)).email,
-    );
-    if (!user || !user.password) {
-      throw new BadRequestException(
-        'No password set. Use set password instead.',
-      );
+  async logoutAll(userId: string): Promise<void> {
+    await this.prisma.session.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async me(userId: string): Promise<AuthUser> {
+    const user = await this.usersRepository.findById(userId).catch(() => null);
+    if (!user || user.status !== $Enums.UserStatus.ACTIVE) {
+      throw new UnauthorizedException('User is not active');
     }
-    const isValid = await bcrypt.compare(currentPassword, user.password);
-    if (!isValid) {
-      throw new UnauthorizedException('Current password is incorrect');
-    }
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await this.usersRepository.updatePassword(userId, hashedPassword);
-    return { message: 'Password changed successfully' };
+    return this.toAuthUser(user);
+  }
+
+  get accessTokenExpiresInSeconds(): number {
+    return this.accessTokenTtlSeconds;
   }
 }

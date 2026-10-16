@@ -480,3 +480,55 @@ Task: cleanup batch including deleting `vercel.json`, removing unused devDepende
 - `bunx eslint "src/**/*.ts" "test/**/*.ts"`
 - `bun run build`
 - `git status clean`
+
+## UMS v1
+
+Task: extend the template auth into UMS v1 per `DESIGN.md` — RS256 tokens carrying `roles[]`/`orgs[]`, Prisma model rewrite, argon2 passwords, opaque refresh tokens with rotation + reuse detection, hardened endpoints, users/orgs admin APIs, JWKS, seed, tests. Progress per step below.
+
+### Locked decisions / ambiguities resolved
+
+| Decision | Choice |
+| --- | --- |
+| JWT key env names | Kept the already-committed `UMS_JWT_PRIVATE_KEY` / `UMS_JWT_PRIVATE_KEY_PATH` (not the checklist's `JWT_PRIVATE_KEY_PATH`/`JWT_PUBLIC_KEY_PATH`). The public key + `kid` are DERIVED from the private key (single source of truth), so no `..._PUBLIC_KEY_PATH` is needed. |
+| API prefix | Global `/api` unchanged. Refresh is `POST /api/auth/refresh` (DESIGN contract); the old template `POST /api/auth/refresh-token` is gone. |
+| Orgs route | `@Controller('orgs')` → `/api/orgs` per DESIGN (dir stays `modules/organizations`). |
+| Password hashing | `argon2` (argon2id, OWASP 19 MiB / t=2 / p=1) in `src/common/utils/password.util.ts`; `bcryptjs` removed. |
+| Refresh token | Opaque 32-byte `base64url`, stored only as SHA-256 hex in `Session.refreshHash`. Rotation sets `replacedByHash` + `revokedAt`; presenting a rotated/revoked token revokes the whole `family` (reuse detection). |
+| Access tokens | Stateless RS256; `JwtStrategy.validate()` maps claims only — no DB lookup per request. Claims: `{ sub, email, name, roles[], orgs[], iss:'ums-service', azp:'ums-web' }`; header `kid` = RFC 7638 JWK thumbprint. |
+| RolesGuard | Claims-based (`user.roles.includes(required)`); no PrismaService dependency anymore. Admin gate = role `ums:admin`. |
+| `orgs` claim values | Organization **names** (e.g. `pesanggrahan`). Roles are `Role.name`. Noted since DESIGN only says `orgs[]`. |
+| Google OAuth | Disabled + removed (`google.strategy.ts`, `google-auth.guard.ts`, google routes, `validateGoogleUser`); `passport-google-oauth20` + `@types/...` deps removed; `GOOGLE_*` env made optional. |
+| Removed template endpoints | `POST /auth/set-password`, `POST /auth/change-password`, `GET /auth/verify-token`, `GET /users/me`, `DELETE /users/:id` — not in the DESIGN v1 contract (profile is `GET /api/auth/me`). |
+| JWKS response | Written via `@Res()` (raw) so it keeps the standard root `{ keys: [...] }` shape instead of being wrapped by `ResponseTransformInterceptor`. |
+| Refresh TTL | Read from `JWT_REFRESH_EXPIRATION` (code default `30d`). **The parent must set `JWT_REFRESH_EXPIRATION=30d` in `.env`** — the template shipped `7d`, and `.env` is off-limits to this task. |
+| Legacy secrets | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` are unused now (RS256 signing + opaque refresh); `env.validation.ts` marks them optional (kept for back-compat). |
+
+### Ordered steps
+
+- [x] **Step 1 — Finish RS256 (claimed continuation)**
+  Verified `JwtModule` signs with `RS256` using `UMS_JWT_PRIVATE_KEY`/`UMS_JWT_PRIVATE_KEY_PATH`; added `issuer: 'ums-service'` and `keyid` (JWK thumbprint) to sign options; claims now include `roles[]`, `orgs[]`, `azp: 'ums-web'`. Proof: `src/modules/auth/jwt-rs256.spec.ts` (3 tests).
+- [x] **Step 2 — Prisma schema (DESIGN §3)**
+  Rewrote `prisma/schema.prisma`: `User` adapted (`passwordHash`, `name`, `emailVerifiedAt`, `status: ACTIVE|BLOCKED`), added `Session`, `Role`, `UserRole`, `Organization` (name unique), `OrgMember` (orgId+userId PK, text role), `AuthToken` (`EMAIL_VERIFY|PASSWORD_RESET`). Ran `bunx prisma format` + `bunx prisma generate` ONLY (no migrate — parent runs migrations). NOTE: schema is a destructive rewrite vs the old template schema (drops `RoleName` enum, `users.role`, `users.organizationId`, `user_organizations`, org slug/website/logoUrl) — the parent's migration will be destructive on existing data.
+- [x] **Step 3 — Argon2**
+  `argon2@^0.45.1` added (`argon2.HashOptions` type; `ARGON2_OPTIONS` = argon2id, memoryCost 19456, timeCost 2, parallelism 1). `bcryptjs` removed. Specs use real argon2 hashing.
+- [x] **Step 4 — Refresh flow**
+  `AuthService`: `createSession` (opaque token + sha256), `refresh` (rotate + reuse detection → `revokeFamily`), `logout`, `logoutAll`. HttpOnly cookie `ums_refresh_token` (path `/api/auth`, `sameSite=lax`, `secure` in prod) set on login+refresh, cleared on logout+logout-all. Responses: `{ accessToken, refreshToken, user }`.
+- [x] **Step 5 — Endpoints (`/api`)**
+  `POST /auth/register`, `POST /auth/login` (`@Throttle` 5/60s), `POST /auth/refresh` (cookie OR body), `POST /auth/logout`, `POST /auth/logout-all`, `GET /auth/me`. DTOs use `class-validator` + `@nestjs/swagger`. Cookie parsing via `src/common/utils/cookie.util.ts` (no `cookie-parser` dep).
+- [x] **Step 6 — Users module**
+  `GET /users` (paginated `page`/`limit`, `meta`), `GET /users/:id`, `PATCH /users/:id` (name/status), `POST /users/:id/roles` (replace role set). Guarded by global `RolesGuard` + `@Roles('ums:admin')` from JWT claims.
+- [x] **Step 7 — Orgs module**
+  `GET/POST /orgs`, `GET/PATCH/DELETE /orgs/:id`, `GET /orgs/:id/members`, `POST /orgs/:id/members` (`{ userId, role }`, upsert), `DELETE /orgs/:id/members/:userId`. Guarded `ums:admin`.
+- [x] **Step 8 — JWKS + health**
+  `GET /api/.well-known/jwks.json` (`src/modules/auth/jwks.controller.ts`, `JwtKeysService`, `src/common/utils/jwk.util.ts` — RFC 7638 `kid`, `kty/use/alg/n/e`). Existing `/api/health` terminus check kept.
+- [x] **Step 9 — Seed**
+  `prisma/seed.ts` (idempotent upserts; argon2 hash computed BEFORE upsert) + `package.json` `"seed": "bun prisma/seed.ts"` and `"prisma": { "seed": ... }`. Env: `UMS_ADMIN_EMAIL`/`UMS_ADMIN_PASSWORD`/`UMS_ADMIN_NAME`; creates role `ums:admin`, org `pesanggrahan`, admin user (`ACTIVE`, auto-verified), `UserRole` + `OrgMember` (role `admin`). NOT run (needs DB; parent runs migrations first).
+- [x] **Step 10 — Tests**
+  `auth.service.spec.ts` rewritten (login hashing, rotation, reuse detection → family revoke, expiry, inactive user, logout/logout-all, validateUser, register). `jwt-rs256.spec.ts` rewritten (RS256 header+kid, claims incl. `iss`/`azp`, forged HS256 rejected). New `test/auth.e2e-spec.ts` runs the register→login→refresh→logout flow but is opt-in (`RUN_E2E=true`) so it skips without a live DB. Added `.js` moduleNameMapper to `test/jest-e2e.json`.
+- [x] **Step 11 — Gates**
+  `bunx tsc --noEmit` OK · `bunx eslint "src/**/*.ts" "test/**/*.ts"` OK (0 errors/warnings) · `bun run build` OK · `bunx jest --config jest.config.js` → 7 suites / 51 tests passed.
+
+### Notes / follow-ups for the parent
+- Run migrations (`bunx prisma migrate dev`) then `bun run seed`; set `UMS_REFRESH_EXPIRATION`/`JWT_REFRESH_EXPIRATION=30d` and `UMS_ADMIN_*` in `.env`.
+- `tsconfig.build.json` now excludes `prisma/` so `prisma/seed.ts` doesn't shift the Nest `dist/` root (`tsc --noEmit` still typechecks it).
+- `dist/` and `bun.lock` were regenerated; `.gitignore` still carries the previous session's uncommitted `keys/` entry (left as-is).

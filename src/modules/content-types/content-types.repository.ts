@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateContentTypeDto } from './dto/create-content-type.dto.js';
 import { UpdateContentTypeDto } from './dto/update-content-type.dto.js';
+import type { Prisma } from '@prisma/client';
 
 @Injectable()
 export class ContentTypesRepository {
@@ -17,7 +18,7 @@ export class ContentTypesRepository {
         key: dto.key,
         name: dto.name,
         description: dto.description,
-        fields: dto.fields,
+        fields: dto.fields as unknown as Prisma.InputJsonValue,
         isSingleton: dto.isSingleton ?? false,
       },
     });
@@ -52,15 +53,18 @@ export class ContentTypesRepository {
 
   async update(id: string, dto: UpdateContentTypeDto) {
     await this.findById(id);
+    const data: Prisma.ContentTypeUpdateInput = {
+      ...(dto.key && { key: dto.key }),
+      ...(dto.name && { name: dto.name }),
+      ...(dto.description !== undefined && { description: dto.description }),
+      ...(dto.isSingleton !== undefined && { isSingleton: dto.isSingleton }),
+    };
+    if (dto.fields) {
+      data.fields = dto.fields as unknown as Prisma.InputJsonValue;
+    }
     return this.prisma.contentType.update({
       where: { id },
-      data: {
-        ...(dto.key && { key: dto.key }),
-        ...(dto.name && { name: dto.name }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.fields && { fields: dto.fields }),
-        ...(dto.isSingleton !== undefined && { isSingleton: dto.isSingleton }),
-      },
+      data,
     });
   }
 

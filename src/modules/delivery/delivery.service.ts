@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CategoriesRepository } from '../categories/categories.repository.js';
 import { TagsRepository } from '../tags/tags.repository.js';
-import { MinioService } from '../media/minio.service.js';
+import { MediaService } from '../media/media.service.js';
 import { ContentStatus } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 import { Response } from 'express';
@@ -13,7 +13,7 @@ export class DeliveryService {
     private prisma: PrismaService,
     private categoriesRepo: CategoriesRepository,
     private tagsRepo: TagsRepository,
-    private minioService: MinioService,
+    private mediaService: MediaService,
   ) {}
 
   async findPublishedContent(query: {
@@ -131,16 +131,15 @@ export class DeliveryService {
     return this.tagsRepo.findAll();
   }
 
-  async streamMedia(storageKey: string, res: Response) {
-    // storageKey might be urlencoded or contain slashes
-    const decodedKey = decodeURIComponent(storageKey);
-    try {
-      const stream = await this.minioService.getObjectStream(decodedKey);
-      stream.pipe(res);
-    } catch {
+  async streamMedia(objectKey: string, res: Response) {
+    const decodedKey = decodeURIComponent(objectKey);
+    const presignedUrl =
+      await this.mediaService.getPresignedUrlByObjectKey(decodedKey);
+    if (!presignedUrl) {
       throw new NotFoundException(
-        `Media with storageKey ${decodedKey} not found`,
+        `Media with objectKey ${decodedKey} not found`,
       );
     }
+    res.redirect(302, presignedUrl);
   }
 }

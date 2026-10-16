@@ -43,32 +43,17 @@ class EnvironmentVariables {
   CORS_ORIGINS?: string;
 
   @IsString()
-  @IsOptional()
-  MINIO_ENDPOINT: string = 'localhost';
+  FILE_SERVICE_URL!: string;
+
+  @IsString()
+  FILE_SERVICE_EMAIL!: string;
+
+  @IsString()
+  FILE_SERVICE_PASSWORD!: string;
 
   @IsPort()
   @IsOptional()
-  MINIO_PORT: string = '9000';
-
-  @IsString()
-  @IsOptional()
-  MINIO_USE_SSL: string = 'false';
-
-  @IsString()
-  @IsOptional()
-  MINIO_ACCESS_KEY: string = 'minioadmin';
-
-  @IsString()
-  @IsOptional()
-  MINIO_SECRET_KEY: string = 'minioadmin';
-
-  @IsString()
-  @IsOptional()
-  MINIO_BUCKET: string = 'cms-media';
-
-  @IsString()
-  @IsOptional()
-  MEDIA_PUBLIC_URL_BASE?: string;
+  FILE_SERVICE_TIMEOUT_MS?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

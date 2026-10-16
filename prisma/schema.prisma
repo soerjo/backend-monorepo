@@ -103,12 +103,12 @@ model ContentTag {
 
 model MediaAsset {
   id           String   @id @default(uuid())
-  fileName     String
+  fileId       String   @unique
+  objectKey    String   @unique
   originalName String
   mimeType     String
   sizeBytes    Int
-  storageKey   String   @unique
-  url          String
+  url          String?
   altText      String?
   width        Int?
   height       Int?

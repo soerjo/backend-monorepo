@@ -1,5 +1,10 @@
 import { Controller, Get, Param, Query, Res } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiExcludeEndpoint,
+} from '@nestjs/swagger';
 import { DeliveryService } from './delivery.service.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import type { Response } from 'express';
@@ -60,8 +65,9 @@ export class DeliveryController {
     return this.deliveryService.getTags();
   }
 
-  @Get('media/:storageKey(*)')
+  @Get('media/*storageKey')
   @ApiOperation({ summary: 'Stream media file by storageKey' })
+  @ApiExcludeEndpoint()
   async getMedia(
     @Param('storageKey') storageKey: string,
     @Res() res: Response,

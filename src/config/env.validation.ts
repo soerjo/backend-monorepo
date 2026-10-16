@@ -36,6 +36,14 @@ class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
+  UMS_JWT_PRIVATE_KEY?: string;
+
+  @IsString()
+  @IsOptional()
+  UMS_JWT_PRIVATE_KEY_PATH?: string;
+
+  @IsString()
+  @IsOptional()
   JWT_ACCESS_EXPIRATION: string = '15m';
 
   @IsString()
@@ -73,5 +81,16 @@ export function validate(config: Record<string, unknown>) {
   if (errors.length > 0) {
     throw new Error(errors.toString());
   }
+
+  if (
+    !validated.UMS_JWT_PRIVATE_KEY?.trim() &&
+    !validated.UMS_JWT_PRIVATE_KEY_PATH?.trim()
+  ) {
+    throw new Error(
+      'Environment validation failed: RS256 JWT signing requires one of ' +
+        'UMS_JWT_PRIVATE_KEY (inline PEM) or UMS_JWT_PRIVATE_KEY_PATH (path to a PEM file).',
+    );
+  }
+
   return validated;
 }

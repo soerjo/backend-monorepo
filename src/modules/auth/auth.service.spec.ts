@@ -5,6 +5,7 @@ import * as bcrypt from 'bcryptjs';
 import { UsersRepository } from '../users/users.repository.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AuthService } from './auth.service.js';
+import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -61,6 +62,33 @@ describe('AuthService', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  describe('login', () => {
+    it('signs access claims with sub + email and keeps refresh on HS256', () => {
+      const result = service.login(expectedAuthUser as unknown as AuthUser);
+
+      expect(sign).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          id: 'user-1',
+          sub: 'user-1',
+          email: 'user@example.com',
+        }),
+      );
+      expect(sign).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ sub: 'user-1', email: 'user@example.com' }),
+        expect.objectContaining({
+          secret: 'refresh-secret',
+          algorithm: 'HS256',
+        }),
+      );
+      expect(result).toEqual({
+        accessToken: 'new-access',
+        refreshToken: 'new-refresh',
+      });
+    });
   });
 
   describe('refreshTokens', () => {

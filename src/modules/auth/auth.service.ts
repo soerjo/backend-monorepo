@@ -121,10 +121,13 @@ export class AuthService {
   }
 
   login(payload: AuthUser) {
+    const claims = { ...payload, sub: payload.id, email: payload.email };
+
     return {
-      accessToken: this.jwtService.sign(payload),
-      refreshToken: this.jwtService.sign(payload, {
+      accessToken: this.jwtService.sign(claims),
+      refreshToken: this.jwtService.sign(claims, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET')!,
+        algorithm: 'HS256',
         expiresIn: parseDurationToSeconds(
           this.configService.get<string>('JWT_REFRESH_EXPIRATION')!,
         ),

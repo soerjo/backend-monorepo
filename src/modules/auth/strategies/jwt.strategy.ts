@@ -4,7 +4,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 // import type { JwtPayload } from '../../../common/interfaces/jwt-payload.interface.js';
 import { AuthService } from '../auth.service.js';
-import { AuthUser } from 'src/common/interfaces/auth-user.interface.js';
+import { loadJwtRsaKeypair } from '../../../common/utils/jwt-keypair.util.js';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -12,15 +12,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private configService: ConfigService,
     private authService: AuthService,
   ) {
+    const { publicKey } = loadJwtRsaKeypair({
+      privateKey: configService.get<string>('UMS_JWT_PRIVATE_KEY'),
+      privateKeyPath: configService.get<string>('UMS_JWT_PRIVATE_KEY_PATH'),
+    });
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_ACCESS_SECRET')!,
+      algorithms: ['RS256'],
+      secretOrKey: publicKey,
     });
   }
 
-  async validate(payload: AuthUser) {
-    const user = await this.authService.validateUserById(payload.id);
+  async validate(payload: { sub?: string; id?: string; email?: string }) {
+    const userId = payload.sub ?? payload.id;
+    if (!userId) {
+      throw new UnauthorizedException();
+    }
+    const user = await this.authService.validateUserById(userId);
     if (!user) {
       throw new UnauthorizedException();
     }

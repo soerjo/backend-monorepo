@@ -9,6 +9,8 @@ import { JwtStrategy } from './strategies/jwt.strategy.js';
 import { GoogleStrategy } from './strategies/google.strategy.js';
 import { UsersModule } from '../users/users.module.js';
 import { parseDurationToSeconds } from '../../common/utils/token-expiry.util.js';
+import { loadJwtRsaKeypair } from '../../common/utils/jwt-keypair.util.js';
+import type { JwtModuleOptions } from '@nestjs/jwt';
 
 @Module({
   imports: [
@@ -17,14 +19,22 @@ import { parseDurationToSeconds } from '../../common/utils/token-expiry.util.js'
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_ACCESS_SECRET')!,
-        signOptions: {
-          expiresIn: parseDurationToSeconds(
-            configService.get<string>('JWT_ACCESS_EXPIRATION')!,
-          ), // in second
-        },
-      }),
+      useFactory: (configService: ConfigService): JwtModuleOptions => {
+        const { privateKey } = loadJwtRsaKeypair({
+          privateKey: configService.get<string>('UMS_JWT_PRIVATE_KEY'),
+          privateKeyPath: configService.get<string>('UMS_JWT_PRIVATE_KEY_PATH'),
+        });
+
+        return {
+          privateKey,
+          signOptions: {
+            algorithm: 'RS256',
+            expiresIn: parseDurationToSeconds(
+              configService.get<string>('JWT_ACCESS_EXPIRATION')!,
+            ), // in second
+          },
+        };
+      },
     }),
   ],
   controllers: [AuthController],

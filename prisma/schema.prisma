@@ -7,39 +7,114 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum RoleName {
-  SYSTEM
-  ADMIN
-  USER
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
 }
 
-model User {
-  id                    String   @id @default(uuid())
-  email                 String   @unique
-  password              String
-  firstName             String?
-  lastName              String?
-  isActive              Boolean  @default(true)
-  forgotPasswordRequest Boolean  @default(false)
-  role                  RoleName @default(USER)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  organizationId        String
-
-  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@map("users")
-}
-
-model Organization {
+model ContentType {
   id          String   @id @default(uuid())
+  key         String   @unique
   name        String
-  slug        String   @unique
-  logoUrl     String?
+  description String?
+  fields      Json
+  isSingleton Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  users       User[]
+  entries     ContentEntry[]
 
-  @@map("organizations")
+  @@map("content_types")
+}
+
+model ContentEntry {
+  id            String        @id @default(uuid())
+  contentTypeId String
+  status        ContentStatus @default(DRAFT)
+  slug          String
+  data          Json
+  locale        String        @default("id")
+  createdById   String
+  publishedById String?
+  publishedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  contentType   ContentType   @relation(fields: [contentTypeId], references: [id], onDelete: Cascade)
+  versions      ContentVersion[]
+  tags          ContentTag[]
+
+  @@unique([contentTypeId, slug, locale])
+  @@map("content_entries")
+}
+
+model ContentVersion {
+  id          String       @id @default(uuid())
+  entryId     String
+  version     Int
+  data        Json
+  createdById String
+  createdAt   DateTime     @default(now())
+
+  entry       ContentEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@unique([entryId, version])
+  @@map("content_versions")
+}
+
+model Category {
+  id          String     @id @default(uuid())
+  key         String     @unique
+  name        String
+  parentId    String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryHierarchy")
+
+  @@map("categories")
+}
+
+model Tag {
+  id        String       @id @default(uuid())
+  key       String       @unique
+  name      String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  entries   ContentTag[]
+
+  @@map("tags")
+}
+
+model ContentTag {
+  entryId String
+  tagId   String
+
+  entry   ContentEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  tag     Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([entryId, tagId])
+  @@unique([entryId, tagId])
+  @@map("content_tags")
+}
+
+model MediaAsset {
+  id           String   @id @default(uuid())
+  fileName     String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String   @unique
+  url          String
+  altText      String?
+  width        Int?
+  height       Int?
+  uploadedById String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("media_assets")
 }

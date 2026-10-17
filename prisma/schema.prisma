@@ -13,6 +13,55 @@ enum RoleName {
   USER
 }
 
+enum WarehouseType {
+  CENTRAL_DC
+  STORE_OUTLET
+  TRANSIT
+}
+
+enum StorageBinStatus {
+  ACTIVE
+  QUARANTINE
+  LOCKED
+}
+
+enum StockLedgerRefType {
+  POS_SALE
+  POS_REFUND
+  INBOUND_PO
+  TRANSFER_OUT
+  TRANSFER_IN
+  STOCK_ADJUSTMENT
+}
+
+enum InboundShipmentStatus {
+  PENDING
+  PARTIAL
+  COMPLETED
+  CANCELLED
+}
+
+enum StockTransferStatus {
+  DRAFT
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+enum StockAdjustmentReason {
+  SHRINKAGE
+  EXPIRED
+  SAMPLING
+  DAMAGE
+  OTHER
+}
+
+enum StockAdjustmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id                    String   @id @default(uuid())
   email                 String   @unique
@@ -42,4 +91,200 @@ model Organization {
   users       User[]
 
   @@map("organizations")
+}
+
+model Warehouse {
+  id        String        @id @default(uuid())
+  code      String        @unique
+  name      String
+  type      WarehouseType
+  address   String?
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  bins           StorageBin[]
+  productStocks  ProductStock[]
+  stockLedgers   StockLedger[]
+  inboundShipments InboundShipment[]
+  transfersOut   StockTransfer[] @relation("OriginWarehouse")
+  transfersIn    StockTransfer[] @relation("DestinationWarehouse")
+  adjustments    StockAdjustment[]
+
+  @@map("warehouses")
+}
+
+model StorageBin {
+  id          String           @id @default(uuid())
+  warehouseId String
+  binCode     String
+  zoneName    String
+  aisle       String?
+  rack        String?
+  status      StorageBinStatus @default(ACTIVE)
+  createdAt   DateTime         @default(now())
+
+  warehouse     Warehouse      @relation(fields: [warehouseId], references: [id])
+  productStocks ProductStock[]
+  stockLedgers  StockLedger[]
+  adjustmentItems StockAdjustmentItem[]
+
+  @@unique([warehouseId, binCode])
+  @@map("storage_bins")
+}
+
+model ProductStock {
+  id               String   @id @default(uuid())
+  warehouseId      String
+  binId            String
+  productId        String
+  sku              String
+  batchNumber      String   @default("-")
+  expiryDate       DateTime?
+  quantityOnHand   Decimal  @db.Decimal(15, 3)
+  quantityReserved Decimal  @default(0) @db.Decimal(15, 3)
+  updatedAt        DateTime @updatedAt
+
+  warehouse Warehouse  @relation(fields: [warehouseId], references: [id])
+  bin       StorageBin @relation(fields: [binId], references: [id])
+
+  @@unique([binId, productId, batchNumber, expiryDate])
+  @@map("product_stocks")
+}
+
+model StockLedger {
+  id              String             @id @default(uuid())
+  transactionTime DateTime           @default(now())
+  warehouseId     String
+  binId           String
+  productId       String
+  sku             String
+  batchNumber     String             @default("-")
+  changeQuantity  Decimal            @db.Decimal(15, 3)
+  balanceAfter    Decimal            @db.Decimal(15, 3)
+  referenceType   StockLedgerRefType
+  referenceId     String
+  notes           String?
+
+  warehouse Warehouse  @relation(fields: [warehouseId], references: [id])
+  bin       StorageBin @relation(fields: [binId], references: [id])
+
+  @@index([warehouseId, sku])
+  @@map("stock_ledger")
+}
+
+model InboundShipment {
+  id            String                @id @default(uuid())
+  shipmentNo    String                @unique
+  warehouseId   String
+  supplierId    String?
+  referencePoNo String?
+  status        InboundShipmentStatus @default(PENDING)
+  receivedAt    DateTime?
+  createdAt     DateTime              @default(now())
+
+  warehouse Warehouse            @relation(fields: [warehouseId], references: [id])
+  items     InboundShipmentItem[]
+
+  @@map("inbound_shipments")
+}
+
+model InboundShipmentItem {
+  id               String    @id @default(uuid())
+  shipmentId       String
+  productId        String
+  sku              String
+  batchNumber      String    @default("-")
+  expiryDate       DateTime?
+  quantity         Decimal   @db.Decimal(15, 3)
+  quantityReceived Decimal   @default(0) @db.Decimal(15, 3)
+
+  shipment InboundShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@map("inbound_shipment_items")
+}
+
+model StockTransfer {
+  id                    String              @id @default(uuid())
+  transferNo            String              @unique
+  originWarehouseId     String
+  destinationWarehouseId String
+  status                StockTransferStatus @default(DRAFT)
+  dispatchedAt          DateTime?
+  receivedAt            DateTime?
+  createdAt             DateTime            @default(now())
+
+  originWarehouse      Warehouse           @relation("OriginWarehouse", fields: [originWarehouseId], references: [id])
+  destinationWarehouse Warehouse           @relation("DestinationWarehouse", fields: [destinationWarehouseId], references: [id])
+  items                StockTransferItem[]
+
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id          String   @id @default(uuid())
+  transferId  String
+  productId   String
+  sku         String
+  batchNumber String   @default("-")
+  quantity    Decimal  @db.Decimal(15, 3)
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  @@map("stock_transfer_items")
+}
+
+model StockAdjustment {
+  id             String                @id @default(uuid())
+  adjustmentNo   String                @unique
+  warehouseId    String
+  reason         StockAdjustmentReason
+  status         StockAdjustmentStatus @default(PENDING)
+  requestedValue Decimal?              @db.Decimal(15, 2)
+  approverId     String?
+  notes          String?
+  createdAt      DateTime              @default(now())
+
+  warehouse Warehouse             @relation(fields: [warehouseId], references: [id])
+  items     StockAdjustmentItem[]
+
+  @@map("stock_adjustments")
+}
+
+model StockAdjustmentItem {
+  id               String    @id @default(uuid())
+  adjustmentId     String
+  binId            String
+  productId        String
+  sku              String
+  batchNumber      String    @default("-")
+  expiryDate       DateTime?
+  currentQuantity  Decimal   @db.Decimal(15, 3)
+  adjustedQuantity Decimal   @db.Decimal(15, 3)
+
+  adjustment StockAdjustment @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+  bin        StorageBin      @relation(fields: [binId], references: [id])
+
+  @@map("stock_adjustment_items")
+}
+
+model ProcessedEvent {
+  eventId       String   @id
+  sourceService String
+  eventType     String
+  processedAt   DateTime @default(now())
+
+  @@map("processed_events")
+}
+
+model DeadLetterEvent {
+  id          String   @id @default(uuid())
+  eventId     String
+  eventType   String
+  payload     Json
+  errorReason String
+  status      String   @default("UNRESOLVED")
+  createdAt   DateTime @default(now())
+
+  @@map("dead_letter_events")
 }

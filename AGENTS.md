@@ -71,6 +71,14 @@ src/
     roles/                        # CRUD (admin-guarded)
     user-organizations/           # CRUD (admin-guarded) — junction table: user + org + role
     health/                       # Terminus health check with Prisma indicator
+    metrics/                      # prom-client registry, /metrics exposition (raw Express in main.ts)
+    warehouses/                   # WMS: warehouse CRUD (/api/v1/warehouses)
+    storage-bins/                 # WMS: bins under /api/v1/warehouses/:warehouseId/bins + PATCH /api/v1/bins/:id
+    inventory/                    # WMS core engine: recordStockMovement + allocateStock (FEFO/FIFO), on-hand / ledger / low-stock queries
+    inbound/                      # WMS: goods receipts (staging bin) + putaway
+    transfers/                    # WMS: inter-warehouse transfers (DRAFT → IN_TRANSIT → COMPLETED) + bin-transfer
+    adjustments/                  # WMS: stock adjustments with WMS_APPROVAL_THRESHOLD auto-approval
+    pos-consumer/                 # WMS: POS event consumer (idempotent, dead-letter on oversell) + dev endpoint
 ```
 
 ## Database schema (PostgreSQL via Prisma v6)
@@ -82,9 +90,21 @@ src/
 - No enums in schema — roles are string-based
 - No soft deletes implemented (isActive field exists on User but is never checked)
 
+### WMS schema (all tables snake_case via `@@map`)
+
+- **Warehouse** — id, code (unique), name, type (`CENTRAL_DC` | `STORE_OUTLET` | `TRANSIT`), address?, isActive (default true)
+- **StorageBin** — id, warehouseId (FK), binCode, zoneName, aisle?, rack?, status (`ACTIVE` default), createdAt; `@@unique([warehouseId, binCode])`
+- **ProductStock** — id, warehouseId (FK), binId (FK), productId, sku, batchNumber (default `-`), expiryDate?, quantityOnHand (Decimal 15,3), quantityReserved (Decimal 15,3, default 0); `@@unique([binId, productId, batchNumber, expiryDate])`
+- **StockLedger** — append-only movement log: transactionTime, warehouseId, binId, productId, sku, changeQuantity (Decimal 15,3), balanceAfter, referenceType (`POS_SALE`/`POS_REFUND`/`INBOUND_PO`/`TRANSFER_OUT`/`TRANSFER_IN`/`STOCK_ADJUSTMENT`), referenceId, notes?
+- **InboundShipment** + **InboundShipmentItem** — shipmentNo (unique), warehouseId (FK), supplierId?, referencePoNo?, status (`PENDING`/`PARTIAL`/`COMPLETED`/`CANCELLED`), receivedAt?; items carry batch/expiry/quantity/quantityReceived
+- **StockTransfer** + **StockTransferItem** — transferNo (unique), originWarehouseId (FK), destinationWarehouseId (FK), status (`DRAFT`/`IN_TRANSIT`/`COMPLETED`/`CANCELLED`), dispatchedAt?, receivedAt?
+- **StockAdjustment** + **StockAdjustmentItem** — adjustmentNo (unique), warehouseId (FK), reason (`SHRINKAGE`/`EXPIRED`/`SAMPLING`/`DAMAGE`/`OTHER`), status (`PENDING`/`APPROVED`/`REJECTED`), requestedValue (Decimal 15,2)?, approverId?
+- **ProcessedEvent** — eventId (`@id`), sourceService, eventType, processedAt (idempotency for POS events)
+- **DeadLetterEvent** — failed/oversell events: eventId, eventType, payload (Json), errorReason, status (default `UNRESOLVED`)
+
 ## Routes
 
-All routes under global prefix `/api`. Total: 23 routes (4 public, 19 JWT-protected, 16 admin-gated) + 1 raw Express handler outside the prefix (`GET /metrics`, public — see Metrics below).
+All routes under global prefix `/api`. Total: 42 routes (5 public, 37 JWT-protected, 16 admin-gated) + 1 raw Express handler outside the prefix (`GET /metrics`, public — see Metrics below). WMS routes live under `/api/v1` (see WMS section below).
 
 ### Auth (`/api/auth`)
 
@@ -149,6 +169,32 @@ All routes under global prefix `/api`. Total: 23 routes (4 public, 19 JWT-protec
 | ------ | ---------- | ------ | ---------------------------------------------------------------------------------------------- |
 | GET    | `/metrics` | Public | Raw Express handler registered in `main.ts` — bypasses prefix, guards, throttler, and transform |
 
+### WMS (`/api/v1`)
+
+Paths below are relative to the `/api/v1` prefix. All are JWT-protected except the dev POS-event endpoint.
+
+| Method | Path                                 | Auth   | Description                                             |
+| ------ | ------------------------------------ | ------ | ------------------------------------------------------- |
+| GET    | `/warehouses`                        | JWT    | List warehouses (filter by type / active status)        |
+| POST   | `/warehouses`                        | JWT    | Create warehouse                                        |
+| GET    | `/warehouses/:id`                    | JWT    | Warehouse detail                                        |
+| PATCH  | `/warehouses/:id`                    | JWT    | Update warehouse                                        |
+| GET    | `/warehouses/:warehouseId/bins`      | JWT    | List bins for a warehouse (filter by status / zone)     |
+| POST   | `/warehouses/:warehouseId/bins`      | JWT    | Create bin under a warehouse                            |
+| PATCH  | `/bins/:id`                          | JWT    | Update bin status (`ACTIVE`/`QUARANTINE`/`LOCKED`)      |
+| GET    | `/inventory/on-hand`                 | JWT    | On-hand stock (filter by warehouse / SKU / batch)       |
+| GET    | `/inventory/ledger`                  | JWT    | Stock ledger (filter by warehouse / SKU / type / date)  |
+| GET    | `/inventory/low-stock`               | JWT    | Items below the stock threshold                         |
+| POST   | `/inbound/receipts`                  | JWT    | Goods receipt into a receiving/staging bin              |
+| POST   | `/inbound/putaway`                   | JWT    | Move received goods from staging to storage bin         |
+| POST   | `/transfers`                         | JWT    | Create transfer request (`DRAFT`)                       |
+| POST   | `/transfers/:id/dispatch`            | JWT    | Dispatch (`IN_TRANSIT`), deducts origin stock           |
+| POST   | `/transfers/:id/receive`             | JWT    | Receive (`COMPLETED`), adds destination stock           |
+| POST   | `/transfers/bin-transfer`            | JWT    | Immediate bin-to-bin move in the same warehouse         |
+| POST   | `/inventory/adjustments`             | JWT    | Create adjustment (auto-approve below threshold)        |
+| POST   | `/inventory/adjustments/:id/approve` | JWT    | Approve a pending adjustment                            |
+| POST   | `/dev/pos-event`                     | Public | Simulate `ORDER_COMPLETED`/`ORDER_REFUNDED`; 403 unless `WMS_DEV_EVENT_ENDPOINT=1` |
+
 ## Request processing pipeline
 
 1. Winston logger (replaces NestJS default)
@@ -179,6 +225,8 @@ All routes under global prefix `/api`. Total: 23 routes (4 public, 19 JWT-protec
 | `JWT_ACCESS_EXPIRATION`  | No       | `15m`         | Access token expiry               |
 | `JWT_REFRESH_EXPIRATION` | No       | `7d`          | Refresh token expiry              |
 | `CORS_ORIGINS`           | No       | —             | Comma-separated allowed origins; unset/empty enables CORS for all origins (dev) |
+| `WMS_APPROVAL_THRESHOLD` | No       | `0`           | Stock adjustments with `requestedValue` at or below this value are auto-approved (default `0` = auto-approve) |
+| `WMS_DEV_EVENT_ENDPOINT` | No       | `0`           | Set to `1` to enable the dev POS event endpoint (`POST /api/v1/dev/pos-event`) |
 
 ## Module pattern
 

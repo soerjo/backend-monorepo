@@ -75,6 +75,34 @@ Create a `.env` file (see `.env.example`) before running the app. Key variables:
 | `GOOGLE_CALLBACK_URL`    | No       | see `.env.example` | Google OAuth callback URL                                                    |
 | `FRONTEND_URL`           | No       | `http://localhost:5173` | Frontend base URL (Google OAuth redirect)                                |
 | `CORS_ORIGINS`           | No       | —             | Comma-separated allowed origins; unset/empty enables CORS for all origins (dev)   |
+| `WMS_APPROVAL_THRESHOLD` | No       | `0`           | Stock adjustments with `requestedValue` at or below this value are auto-approved   |
+| `WMS_DEV_EVENT_ENDPOINT` | No       | `0`           | Set to `1` to enable the dev POS event endpoint (`POST /api/v1/dev/pos-event`)     |
+
+## WMS API routes (under `/api/v1`)
+
+| Domain            | Method | Path                                             | Description                                        |
+| ----------------- | ------ | ------------------------------------------------ | -------------------------------------------------- |
+| Warehouses        | GET    | `/v1/warehouses`                                 | List warehouses (filter by type / active status)   |
+| Warehouses        | POST   | `/v1/warehouses`                                 | Create warehouse                                   |
+| Warehouses        | GET    | `/v1/warehouses/:id`                             | Warehouse detail                                   |
+| Warehouses        | PATCH  | `/v1/warehouses/:id`                             | Update warehouse                                   |
+| Storage Bins      | GET    | `/v1/warehouses/:warehouseId/bins`               | List bins for a warehouse (filter by status/zone)  |
+| Storage Bins      | POST   | `/v1/warehouses/:warehouseId/bins`               | Create bin under a warehouse                       |
+| Storage Bins      | PATCH  | `/v1/bins/:id`                                   | Update bin status (`ACTIVE`/`QUARANTINE`/`LOCKED`) |
+| Inventory         | GET    | `/v1/inventory/on-hand`                          | On-hand stock (filter by warehouse / SKU / batch)  |
+| Inventory         | GET    | `/v1/inventory/ledger`                           | Stock ledger (filter by warehouse / SKU / type / date) |
+| Inventory         | GET    | `/v1/inventory/low-stock`                        | Items below the stock threshold                    |
+| Inbound           | POST   | `/v1/inbound/receipts`                           | Goods receipt into a receiving/staging bin         |
+| Inbound           | POST   | `/v1/inbound/putaway`                            | Move received goods from staging to storage bin    |
+| Transfers         | POST   | `/v1/transfers`                                  | Create transfer request (`DRAFT`)                  |
+| Transfers         | POST   | `/v1/transfers/:id/dispatch`                     | Dispatch (`IN_TRANSIT`), deducts origin stock      |
+| Transfers         | POST   | `/v1/transfers/:id/receive`                      | Receive (`COMPLETED`), adds destination stock      |
+| Transfers         | POST   | `/v1/transfers/bin-transfer`                     | Immediate bin-to-bin move in the same warehouse    |
+| Adjustments       | POST   | `/v1/inventory/adjustments`                      | Create adjustment (auto-approve below threshold)   |
+| Adjustments       | POST   | `/v1/inventory/adjustments/:id/approve`          | Approve a pending adjustment                       |
+| POS Dev Events    | POST   | `/v1/dev/pos-event`                              | Simulate `ORDER_COMPLETED`/`ORDER_REFUNDED` (guarded by `WMS_DEV_EVENT_ENDPOINT=1`) |
+
+Swagger UI is available at `/docs`.
 
 ## Deployment
 

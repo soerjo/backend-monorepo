@@ -62,6 +62,14 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   CORS_ORIGINS?: string;
+
+  @IsString()
+  @IsOptional()
+  WMS_APPROVAL_THRESHOLD: string = '0';
+
+  @IsString()
+  @IsOptional()
+  WMS_DEV_EVENT_ENDPOINT: string = '0';
 }
 
 export function validate(config: Record<string, unknown>) {

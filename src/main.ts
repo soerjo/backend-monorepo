@@ -47,8 +47,10 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseTransformInterceptor());
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('API')
-    .setDescription('API documentation')
+    .setTitle('WMS Service API')
+    .setDescription(
+      'Warehouse Management System API — inventory, inbound, transfers, adjustments and POS event consumption',
+    )
     .setVersion('1.0')
     .addBearerAuth()
     .build();

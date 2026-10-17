@@ -3,10 +3,15 @@ import { UsersRepository } from './users.repository.js';
 import { AssignRolesDto } from './dto/assign-roles.dto.js';
 import { ListUsersDto } from './dto/list-users.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { $Enums } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
-  constructor(private usersRepository: UsersRepository) {}
+  constructor(
+    private usersRepository: UsersRepository,
+    private prisma: PrismaService,
+  ) {}
 
   async findAll(query: ListUsersDto) {
     const page = query.page ?? 1;
@@ -32,7 +37,13 @@ export class UsersService {
   }
 
   async update(id: string, dto: UpdateUserDto) {
-    await this.usersRepository.update(id, dto);
+    const updated = await this.usersRepository.update(id, dto);
+    if (dto.status === $Enums.UserStatus.BLOCKED) {
+      await this.prisma.session.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
     return this.findById(id);
   }
 

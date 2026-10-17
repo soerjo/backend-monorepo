@@ -111,9 +111,9 @@ export class AuthController {
 
   @Get('me')
   @ApiBearerAuth()
-  @ApiOkResponse({ description: 'Profile derived from the access token' })
-  me(@CurrentUser() user: AuthUser) {
-    return user;
+  @ApiOkResponse({ description: 'Profile derived from the user record' })
+  async me(@CurrentUser('id') userId: string) {
+    return this.authService.me(userId);
   }
 
   private requestMeta(req: Request): RequestMeta {

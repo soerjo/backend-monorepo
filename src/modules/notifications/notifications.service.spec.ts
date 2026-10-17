@@ -25,6 +25,7 @@ interface CreateNotificationInput {
 interface Mocks {
   repository: {
     findByIdempotencyKey: jest.Mock;
+    findByBaseIdempotencyKey: jest.Mock;
     create: jest.Mock<Promise<{ id: string }>, [CreateNotificationInput]>;
     findById: jest.Mock;
     findDeliveryLogs: jest.Mock;
@@ -37,6 +38,7 @@ function buildService(): { service: NotificationsService; mocks: Mocks } {
   const mocks: Mocks = {
     repository: {
       findByIdempotencyKey: jest.fn(),
+      findByBaseIdempotencyKey: jest.fn().mockResolvedValue([]),
       create: jest.fn<Promise<{ id: string }>, [CreateNotificationInput]>(),
       findById: jest.fn(),
       findDeliveryLogs: jest.fn(),
@@ -96,6 +98,33 @@ describe('NotificationsService', () => {
     const result = await service.send(baseDto());
 
     expect(result.notificationIds).toEqual(['existing']);
+    expect(result.idempotent).toBe(true);
+    expect(mocks.repository.create).not.toHaveBeenCalled();
+    expect(mocks.queue.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('returns all existing rows for a duplicate key even when the fan-out shape changed', async () => {
+    const { service, mocks } = buildService();
+    mocks.repository.findByBaseIdempotencyKey.mockResolvedValue([
+      { id: 'existing-socket', traceId: 'original-trace' },
+      { id: 'existing-email', traceId: 'original-trace' },
+    ]);
+
+    const result = await service.send(
+      baseDto({
+        idempotency_key: 'req-1',
+        channels: [NotificationChannel.SOCKET_IO],
+      }),
+    );
+
+    expect(mocks.repository.findByBaseIdempotencyKey).toHaveBeenCalledWith(
+      'req-1',
+    );
+    expect(result.notificationIds).toEqual([
+      'existing-socket',
+      'existing-email',
+    ]);
+    expect(result.traceId).toBe('original-trace');
     expect(result.idempotent).toBe(true);
     expect(mocks.repository.create).not.toHaveBeenCalled();
     expect(mocks.queue.enqueue).not.toHaveBeenCalled();

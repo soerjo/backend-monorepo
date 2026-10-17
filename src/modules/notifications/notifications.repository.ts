@@ -42,6 +42,18 @@ export class NotificationsRepository {
     });
   }
 
+  findByBaseIdempotencyKey(baseIdempotencyKey: string) {
+    return this.prisma.notification.findMany({
+      where: {
+        OR: [
+          { idempotencyKey: baseIdempotencyKey },
+          { idempotencyKey: { startsWith: `${baseIdempotencyKey}::` } },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
   create(input: CreateNotificationInput) {
     return this.prisma.notification.create({ data: input });
   }

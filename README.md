@@ -1,116 +1,192 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# ums-service — User Management Service (UMS)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+<p align="center"><em>NestJS v11 · Prisma v6 · PostgreSQL · RS256 JWT · Refresh rotation + reuse detection</em></p>
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+**UMS (User Management Service)** adalah layanan identitas terpusat untuk seluruh ekosistem aplikasi Mas Soerjo (bank-sampah, CMS, aplikasi berikutnya). Ia memegang **Authentication** (login/register/session) dan **Authorization kasar** (roles, permissions, organizations); keputusan otorisasi fine-grained tetap di masing-masing BE aplikasi.
 
-## Description
+> Kontrak desain lengkap ada di [`DESIGN.md`](./DESIGN.md). Dokumen ini adalah panduan penggunaan & referensi teknis.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Kemampuan
 
-## Project setup
+- **Auth core**: register, login, refresh (rotasi + reuse detection), logout, logout-all, me
+- **RBAC**: CRUD Roles + Permissions, klaim `roles[]` & `perms[]` di access token, pemetaan via `PUT /roles/:id/permissions`
+- **Organizations**: CRUD org + membership (add/remove/list member)
+- **Keamanan**: password argon2id, refresh token opaque 32-byte (disimpan sebagai SHA-256 hash), akses ditolak untuk user BLOCKED + revoke sesi saat block, rate limit configurable
+- **Integrasi BE lain**: endpoint **JWKS** publik — semua service lain memverifikasi JWT secara lokal tanpa call ke UMS per request
+- **Session cookie**: refresh token dikirim via HttpOnly cookie (path `/` agar terbaca Next.js middleware) DAN body
+- **Ops**: health (terminus), metrics prom-client, seed admin idempoten
 
-```bash
-$ bun install
+## Arsitektur
+
+```
+                     (1) login/register                      ┌──────────────┐
+Client ───────────────────────────────────────────▶ UMS API  │  PostgreSQL  │
+       ◀── accessToken (JWT RS256, 15m) + refreshToken ──────┤  Prisma      │
+       (2) Bearer ke BE app (CMS, dst)                       └──────────────┘
+             BE app memverifikasi JWT secara LOKAL via
+             GET /.well-known/jwks.json (public key, ter-cache)
+
+       (3) access token expired → POST /auth/refresh
+           refresh dirotasi; pemakaian ulang token lama =
+           REUSE DETECTION → revoke seluruh session family
 ```
 
-## Compile and run the project
+## Struktur Proyek
 
-```bash
-# development
-$ bun run start
-
-# watch mode
-$ bun run start:dev
-
-# production mode
-$ bun run start:prod
+```
+src/
+  common/                 # guards, decorators, utils
+  config/                 # env.validation, logger (winston)
+  prisma/                 # PrismaService
+  modules/
+    auth/                 # register/login/refresh/logout/logout-all/me,
+    │                     #   jwks.controller, strategies, session handling
+    users/                # list/get/patch/assign-roles (guard ums:admin)
+    roles/                # CRUD roles + PUT :id/permissions
+    permissions/          # CRUD permissions
+    organizations/        # CRUD orgs + members
+    health/               # terminus
+    metrics/              # prom-client
+  main.ts                 # bootstrap, global prefix /api, swagger
+prisma/
+  schema.prisma           # model data (lihat bawah)
+  seed.ts                 # admin idempoten (bun run seed)
 ```
 
-## Run tests
+## Data Model (Prisma)
 
-```bash
-# unit tests
-$ bun run test
+| Model | Fungsi |
+|---|---|
+| `User` | identitas — email unique, passwordHash (argon2), status (enum `UserStatus`: ACTIVE/BLOCKED), emailVerifiedAt |
+| `Session` | sesi refresh — refreshHash (SHA-256, unique), family, userAgent, ip, expiresAt, revokedAt, replacedByHash |
+| `Role` / `UserRole` | role + pemetaan ke user |
+| `Permission` / `RolePermission` | permission granular + pemetaan ke role |
+| `Organization` / `OrgMember` | organisasi/cabang + keanggotaan |
+| `AuthToken` | token verifikasi/reset (enum `AuthTokenType`) |
 
-# e2e tests
-$ bun run test:e2e
+## API Reference (base `/api`)
 
-# test coverage
-$ bun run test:cov
+Envelope response: `{statusCode, message, data, timestamp, path}`.
+
+### Auth
+
+| Method | Endpoint | Auth | Fungsi |
+|---|---|---|---|
+| POST | `/auth/register` | public | daftar (email, password, name) |
+| POST | `/auth/login` | public | → `{accessToken, refreshToken, user}`; refreshToken juga di-set HttpOnly cookie |
+| POST | `/auth/refresh` | cookie/body | rotasi refresh token; reuse terdeteksi → revoke family |
+| POST | `/auth/logout` | bearer | revoke session ini + clear cookie |
+| POST | `/auth/logout-all` | bearer | revoke semua sesi user |
+| GET | `/auth/me` | bearer | profil + roles/permissions |
+| GET | `/.well-known/jwks.json` | public | public key JWK untuk BE lain |
+
+### RBAC (guard `ums:admin`)
+
+| Method | Endpoint | Fungsi |
+|---|---|---|
+| GET/POST/PATCH/DELETE | `/roles`, `/roles/:id` | CRUD role |
+| PUT | `/roles/:id/permissions` | set permissions role |
+| GET/POST/PATCH/DELETE | `/permissions`, `/permissions/:id` | CRUD permission |
+
+### Users & Organizations (guard `ums:admin`)
+
+| Method | Endpoint | Fungsi |
+|---|---|---|
+| GET | `/users`, `/users/:id` | list/detail user |
+| PATCH | `/users/:id` | update profil/status (block → sesi di-revoke) |
+| POST | `/users/:id/roles` | assign role |
+| GET/POST/PATCH/DELETE | `/orgs`, `/orgs/:id` | CRUD organization |
+| GET/POST/DELETE | `/orgs/:id/members`, `/orgs/:id/members/:userId` | kelola member |
+
+### Ops
+
+| Endpoint | Fungsi |
+|---|---|
+| `GET /api/health` | terminus |
+| `GET /metrics` | Prometheus |
+
+## Access Token — klaim
+
+```json
+{
+  "sub": "<uuid>",
+  "email": "user@example.com",
+  "roles": ["ums:admin"],
+  "perms": ["users:read"],
+  "iss": "ums-service",
+  "azp": "ums-web",
+  "exp": "<15 menit>"
+}
 ```
 
-## Environment variables
+> Konsumen BE: verifikasi via JWKS, cek `iss` = `ums-service`, identitas user = `sub`. Jangan validasi `aud` terhadap client id — klaim pembeda client adalah `azp`.
 
-Create a `.env` file (see `.env.example`) before running the app. Key variables:
+## Environment Variables
 
-| Variable                 | Required | Default       | Description                                                                       |
-| ------------------------ | -------- | ------------- | --------------------------------------------------------------------------------- |
-| `NODE_ENV`               | No       | `development` | development \| production \| test                                                 |
-| `PORT`                   | No       | `3000`        | Server port                                                                       |
-| `DATABASE_URL`           | Yes      | —             | PostgreSQL connection string                                                      |
-| `JWT_ACCESS_SECRET`      | Yes      | —             | Signs access tokens                                                               |
-| `JWT_REFRESH_SECRET`     | Yes      | —             | Signs refresh tokens                                                              |
-| `JWT_ACCESS_EXPIRATION`  | No       | `15m`         | Access token expiry (`s`/`m`/`h`/`d` suffix, or bare seconds)                      |
-| `JWT_REFRESH_EXPIRATION` | No       | `7d`          | Refresh token expiry (`s`/`m`/`h`/`d` suffix, or bare seconds)                     |
-| `GOOGLE_CLIENT_ID`       | Yes      | —             | Google OAuth client ID                                                            |
-| `GOOGLE_CLIENT_SECRET`   | Yes      | —             | Google OAuth client secret                                                        |
-| `GOOGLE_CALLBACK_URL`    | No       | see `.env.example` | Google OAuth callback URL                                                    |
-| `FRONTEND_URL`           | No       | `http://localhost:5173` | Frontend base URL (Google OAuth redirect)                                |
-| `CORS_ORIGINS`           | No       | —             | Comma-separated allowed origins; unset/empty enables CORS for all origins (dev)   |
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `NODE_ENV` | No | `development` | development / production / test |
+| `PORT` | No | `3000` | Server port |
+| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `JWT_ACCESS_EXPIRATION` | No | `15m` | Access token expiry (`s`/`m`/`h`/`d`) |
+| `JWT_REFRESH_EXPIRATION` | No | `30d` | Refresh token expiry |
+| `UMS_JWT_PRIVATE_KEY` | Yes* | — | PEM private key inline (literal atau `\n`-escaped) |
+| `UMS_JWT_PRIVATE_KEY_PATH` | Yes* | — | Path file PEM — prioritas bila diisi. Public key + JWKS diturunkan otomatis |
+| `UMS_ADMIN_EMAIL` / `UMS_ADMIN_PASSWORD` / `UMS_ADMIN_NAME` | seed only | — | Kredensial admin awal (`bun run seed`) |
+| `THROTTLE_TTL_MS` / `THROTTLE_LIMIT` | No | — | Rate limit configurable |
+| `CORS_ORIGINS` | No | — | Origin FE dipisah koma; kosong = allow all (dev) |
+| `FRONTEND_URL` | No | — | Base URL FE |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_CALLBACK_URL` | No | — | OAuth disabled di v1 (opsional, tak dipakai) |
+| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | No | — | **Legacy HS256** — tidak dipakai sejak migrasi RS256 + opaque refresh (boleh dihapus) |
+
+*\* Tepat satu dari `UMS_JWT_PRIVATE_KEY` / `UMS_JWT_PRIVATE_KEY_PATH` wajib diisi. Secret tidak pernah di-commit — inject runtime.*
+
+## Menjalankan
+
+```bash
+bun install
+# siapkan .env (lihat .env.example) + keypair RS256:
+openssl genrsa -out keys/private.pem 2048
+openssl rsa -in keys/private.pem -pubout -out keys/public.pem
+
+bunx prisma migrate dev        # dev — terapkan migrasi
+bunx prisma migrate deploy     # prod
+bun run seed                   # admin idempoten (argon2 hash sebelum upsert)
+bun run start:dev
+
+# Gates
+bun run lint
+bun run test                   # unit (jest)
+bun run test:e2e               # e2e
+bun run build
+```
+
+## Integrasi BE lain (pola yang dipakai my-cms-service)
+
+1. Ambil public key dari `GET /api/.well-known/jwks.json` (atau salin PEM public ke env BE)
+2. Verifikasi JWT di guard: signature (JWKS), `iss`, klaim `roles[]`/`perms[]`
+3. Tidak ada secret yang disimpan di BE konsumen — public key sifatnya publik
+4. Access token pendek (15m) → FE refresh via UMS; BE tidak perlu tahu refresh token
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+- Dockerfile tersedia; CI GitHub Actions (`build/quality/test`) wajib hijau per PR.
+- Deploy produksi via Portainer stack (house rule) di host `soerjo-sever`, network `internal_net`, DB `ums_db` di `postgres_db`.
+- Env/secret di Portainer + di-backup ke repo `container-envs` (standing rule).
+- Rotasi key JWT: generate keypair baru → ganti env `UMS_JWT_PRIVATE_KEY*` → restart; JWKS otomatis menayangkan key baru, token lama mati alami saat expired.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Konvensi Kontribusi
 
-```bash
-$ bun install -g @nestjs/mau
-$ mau deploy
-```
+- Ship via **PR ke main** — CI hijau sebelum merge; tidak push langsung ke main.
+- Selalu mulai dari clone fresh GitHub `main` terbaru; jangan pakai clone lokal basi.
+- Perubahan schema Prisma → migration file ter-commit bersama PR-nya.
+- Secret tidak pernah masuk repo.
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Terkait
 
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+- **my-cms-service** — konsumen JWKS; CMS memverifikasi JWT UMS via public key
+- **my-nextjs-template** — basis FE dengan auth system yang mengonsumsi endpoint `/auth/*` di atas
+- **DESIGN.md** — kontrak desain v1 (sumber kebenaran arsitektur)
 
 ## License
 

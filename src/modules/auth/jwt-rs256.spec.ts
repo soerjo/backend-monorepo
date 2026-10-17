@@ -21,6 +21,7 @@ describe('RS256 access token signing (UMS contract)', () => {
     name: 'Ada Lovelace',
     roles: ['ums:admin'],
     orgs: ['pesanggrahan'],
+    perms: ['users:read'],
   };
 
   let keypair: { privateKey: string; publicKey: string };

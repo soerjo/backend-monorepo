@@ -13,6 +13,19 @@ const ARGON2_OPTIONS: argon2.HashOptions = {
 const ADMIN_ROLE = 'ums:admin';
 const DEFAULT_ORG = 'pesanggrahan';
 
+const STARTER_PERMISSIONS = [
+  { name: 'users:read', description: 'View users' },
+  { name: 'users:write', description: 'Manage users' },
+  { name: 'orgs:read', description: 'View organizations' },
+  { name: 'orgs:write', description: 'Manage organizations' },
+  { name: 'roles:read', description: 'View roles' },
+  { name: 'roles:write', description: 'Manage roles' },
+  { name: 'permissions:read', description: 'View permissions' },
+  { name: 'permissions:write', description: 'Manage permissions' },
+  { name: 'content:read', description: 'View content' },
+  { name: 'content:write', description: 'Manage content' },
+];
+
 async function main() {
   const email = process.env.UMS_ADMIN_EMAIL;
   const password = process.env.UMS_ADMIN_PASSWORD;
@@ -33,6 +46,21 @@ async function main() {
     create: { name: ADMIN_ROLE, description: 'UMS administrator' },
     update: {},
   });
+
+  // Seed permissions and assign all to ums:admin
+  for (const p of STARTER_PERMISSIONS) {
+    const perm = await prisma.permission.upsert({
+      where: { name: p.name },
+      create: { name: p.name, description: p.description },
+      update: { description: p.description },
+    });
+
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: adminRole.id, permissionId: perm.id } },
+      create: { roleId: adminRole.id, permissionId: perm.id },
+      update: {},
+    });
+  }
 
   const organization = await prisma.organization.upsert({
     where: { name: DEFAULT_ORG },
@@ -65,7 +93,7 @@ async function main() {
   });
 
   console.log(
-    `Seeded admin ${email} (role ${ADMIN_ROLE}, organization ${DEFAULT_ORG}).`,
+    `Seeded admin ${email} (role ${ADMIN_ROLE}, organization ${DEFAULT_ORG}, with all permissions).`,
   );
 }
 

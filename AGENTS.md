@@ -480,3 +480,53 @@ Task: cleanup batch including deleting `vercel.json`, removing unused devDepende
 - `bunx eslint "src/**/*.ts" "test/**/*.ts"`
 - `bun run build`
 - `git status clean`
+
+## Notification Service v1
+
+### Checklist
+- [x] **1. Prisma schema per PRD section 5** (Notification + NotificationDeliveryLog, enums, idempotencyKey unique, format & generate)
+  - Verification: `bunx prisma format`, `bunx prisma generate`; schema contains Notification, NotificationDeliveryLog, NotificationChannel/NotificationStatus/DeliveryLogStatus; idempotencyKey is unique.
+
+- [x] **2. Dependencies added**
+  - bullmq, ioredis, nodemailer + @types/nodemailer, telegraf, socket.io, @nestjs/websockets, @nestjs/platform-socket.io, handlebars.
+  - Verification: package.json has these deps; bun.lock updated.
+
+- [x] **3. Config/env**
+  - env.validation.ts updated with REDIS_URL, INTERNAL_API_TOKEN, TELEGRAM_BOT_TOKEN, SMTP_*, NOTIFICATIONS_WORKER_ENABLED, PORT default '3400'.
+  - main.ts listens on PORT=3400; CORS configured via ConfigService.
+  - AppModule imports RedisModule + NotificationsModule.
+
+- [x] **4. Ingestion API: POST /api/v1/notifications/send**
+  - InternalAuthGuard (Bearer INTERNAL_API_TOKEN), @Public on controller; validators: channels vs destinations; idempotency: unique index + service returns existing on conflict (200 when idempotent, 202 when created); response {notification_ids[], trace_id}.
+  - Writes initial PENDING rows and enqueues jobs.
+
+- [x] **5. Queue worker (BullMQ)**
+  - Queue 'notifications', worker starts in onModuleInit (gated by NOTIFICATIONS_WORKER_ENABLED); retries 3 attempts with custom backoff [2000,8000,30000]; transitions PENDING→PROCESSING→SENT/FAILED/RETRY; logs each attempt with latency_ms + provider_response.
+
+- [x] **6. Channel adapters + stubs**
+  - Interface NotificationChannel; Telegram, Email, Socket.IO implementations; FCM/WHATSAPP stubs throw NOT_IMPLEMENTED; ChannelRegistry + Socket.IO gateway emitter.
+  - Telegram uses telegraf; Email uses nodemailer with handlebars rendering path; Socket.IO always "delivers".
+
+- [x] **7. Template engine**
+  - Handlebars renderer in TemplateService with code-based map under src/templates/; supports {{placeholders}}.
+
+- [x] **8. Socket.IO gateway**
+  - @WebSocketGateway, room = recipient_target, optional handshake token validation; emitToRoom provided.
+
+- [x] **9. Logging & masking**
+  - Sanitizer masks password/token/otp/rekening/nrekening before persisting payload/provider_response; structured logs via winston (existing nest-winston setup).
+
+- [x] **10. GET /api/v1/notifications/:id/logs**
+  - Delivery logs listing for a notification; requires internal token; 404 if notification missing.
+
+- [x] **11. Metrics**
+  - Added sent_success_total and sent_failed_total with channel label; recordDelivery method.
+
+- [x] **12. Health**
+  - /api/health includes Redis ping check via RedisHealthIndicator.
+
+- [x] **13. Tests**
+  - Unit specs for sanitizer, backoff, redis-url, internal auth guard, template, channel registry/unimplemented, notifications service (idempotency + validation + masking + multicast), dispatcher (transitions + masking + final attempt), metrics additions. E2e guarded by RUN_NOTIFICATIONS_E2E.
+
+- [x] **14. Final gates**
+  - `bunx tsc --noEmit` (exit 0), `bunx eslint "src/**/*.ts" "test/**/*.ts"` (exit 0), `bun run build` (exit 0), `bun run test` (exit 0 — 13 suites / 82 tests). Fixed 9 `no-unsafe-member-access` errors in `notifications.service.spec.ts` (4) and `notifications.dispatcher.spec.ts` (5) by typing the jest mock generics (`jest.Mock<TReturn, TArgs>` / `jest.fn<TReturn, TArgs>()`) and a `CreateNotificationInput`/`DeliveryLogInput` typed call shape instead of indexing `any`; removed the now-redundant assertions ESLint flagged.

@@ -1,6 +1,7 @@
 import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
+  IsNumber,
   IsOptional,
   IsPort,
   IsString,
@@ -54,6 +55,14 @@ class EnvironmentVariables {
   @IsPort()
   @IsOptional()
   FILE_SERVICE_TIMEOUT_MS?: string;
+
+  @IsNumber()
+  @IsOptional()
+  THROTTLE_TTL_MS: number = 60000;
+
+  @IsNumber()
+  @IsOptional()
+  THROTTLE_LIMIT: number = 10;
 }
 
 export function validate(config: Record<string, unknown>) {

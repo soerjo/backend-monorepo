@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { WinstonModule } from 'nest-winston';
@@ -8,6 +8,7 @@ import { HealthModule } from './modules/health/health.module.js';
 import { MetricsModule } from './modules/metrics/metrics.module.js';
 import { JwtAuthModule } from './common/auth/jwt-auth.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
+import { RolesGuard } from './common/guards/roles.guard.js';
 import { ContentTypesModule } from './modules/content-types/content-types.module.js';
 import { ContentModule } from './modules/content/content.module.js';
 import { CategoriesModule } from './modules/categories/categories.module.js';
@@ -21,7 +22,18 @@ import { validate } from './config/env.validation.js';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate }),
     WinstonModule.forRoot(loggerConfig),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: configService.get<number>('THROTTLE_TTL_MS', 60000),
+            limit: configService.get<number>('THROTTLE_LIMIT', 10),
+          },
+        ],
+      }),
+    }),
     PrismaModule,
     JwtAuthModule,
     HealthModule,
@@ -36,6 +48,7 @@ import { validate } from './config/env.validation.js';
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}

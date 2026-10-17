@@ -6,14 +6,17 @@ import {
   Delete,
   Body,
   Param,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { ContentTypesService } from './content-types.service.js';
 import { CreateContentTypeDto } from './dto/create-content-type.dto.js';
 import { UpdateContentTypeDto } from './dto/update-content-type.dto.js';
+import { Roles } from '../../common/decorators/roles.decorator.js';
 
 @ApiTags('Content Types')
 @ApiBearerAuth()
+@Roles('ums:admin')
 @Controller('content-types')
 export class ContentTypesController {
   constructor(private service: ContentTypesService) {}

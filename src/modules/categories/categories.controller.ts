@@ -11,9 +11,11 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { CategoriesService } from './categories.service.js';
 import { CreateCategoryDto } from './dto/create-category.dto.js';
 import { UpdateCategoryDto } from './dto/update-category.dto.js';
+import { Roles } from '../../common/decorators/roles.decorator.js';
 
 @ApiTags('Categories')
 @ApiBearerAuth()
+@Roles('ums:admin')
 @Controller('categories')
 export class CategoriesController {
   constructor(private service: CategoriesService) {}

@@ -4,6 +4,7 @@ import {
   Post,
   Put,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -124,9 +125,9 @@ export class ContentController {
     return this.contentService.restoreVersion(id, version, user.id);
   }
 
-  @Put(':id/tags')
-  @ApiOperation({ summary: 'Replace tags attached to a content entry' })
-  setTags(@Param('id') id: string, @Body() dto: UpdateContentTagsDto) {
-    return this.contentService.setTags(id, dto);
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete content entry' })
+  remove(@Param('id') id: string) {
+    return this.contentService.remove(id);
   }
 }

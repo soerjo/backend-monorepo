@@ -140,4 +140,8 @@ export class ContentService {
   async setTags(id: string, dto: UpdateContentTagsDto) {
     return this.contentRepo.setTags(id, dto.tagIds);
   }
+
+  async remove(id: string) {
+    return this.contentRepo.delete(id);
+  }
 }

@@ -96,4 +96,30 @@ describe('MetricsService', () => {
     expect(text).toContain('process_cpu_seconds_total');
     expect(text).toContain('process_resident_memory_bytes');
   });
+
+  it('increments sent_success_total per channel', async () => {
+    service.recordDelivery('TELEGRAM', true);
+    service.recordDelivery('TELEGRAM', true);
+
+    const line = firstLine(await service.getMetrics(), 'sent_success_total{');
+    expect(line).toContain('channel="TELEGRAM"');
+    expect(parseValue(line)).toBe(2);
+  });
+
+  it('increments sent_failed_total per channel', async () => {
+    service.recordDelivery('EMAIL', false);
+
+    const line = firstLine(await service.getMetrics(), 'sent_failed_total{');
+    expect(line).toContain('channel="EMAIL"');
+    expect(parseValue(line)).toBe(1);
+  });
+
+  it('tracks success and failure counters independently per channel', async () => {
+    service.recordDelivery('TELEGRAM', true);
+    service.recordDelivery('EMAIL', false);
+
+    const text = await service.getMetrics();
+    expect(sampleLines(text, 'sent_success_total{')).toHaveLength(1);
+    expect(sampleLines(text, 'sent_failed_total{')).toHaveLength(1);
+  });
 });

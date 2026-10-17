@@ -9,6 +9,8 @@ import { UsersModule } from './modules/users/users.module.js';
 import { OrganizationsModule } from './modules/organizations/organizations.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { MetricsModule } from './modules/metrics/metrics.module.js';
+import { RedisModule } from './modules/redis/redis.module.js';
+import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { loggerConfig } from './config/logger.config.js';
@@ -20,11 +22,13 @@ import { validate } from './config/env.validation.js';
     WinstonModule.forRoot(loggerConfig),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
     PrismaModule,
+    RedisModule,
     AuthModule,
     UsersModule,
     OrganizationsModule,
     HealthModule,
     MetricsModule,
+    NotificationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

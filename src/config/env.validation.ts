@@ -20,11 +20,47 @@ class EnvironmentVariables {
 
   @IsPort()
   @IsOptional()
-  PORT: string = '3000';
+  PORT: string = '3400';
 
   @IsString()
   @IsNotEmpty()
   DATABASE_URL!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  REDIS_URL!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  INTERNAL_API_TOKEN!: string;
+
+  @IsString()
+  @IsOptional()
+  TELEGRAM_BOT_TOKEN?: string;
+
+  @IsString()
+  @IsOptional()
+  SMTP_HOST?: string;
+
+  @IsPort()
+  @IsOptional()
+  SMTP_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  SMTP_USER?: string;
+
+  @IsString()
+  @IsOptional()
+  SMTP_PASS?: string;
+
+  @IsString()
+  @IsOptional()
+  SMTP_FROM?: string;
+
+  @IsString()
+  @IsOptional()
+  NOTIFICATIONS_WORKER_ENABLED?: string = 'true';
 
   @IsString()
   @IsNotEmpty()

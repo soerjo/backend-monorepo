@@ -27,8 +27,27 @@ export class MetricsService {
     registers: [this.registry],
   });
 
+  private readonly sentSuccessTotal = new Counter<'channel'>({
+    name: 'sent_success_total',
+    help: 'Total number of successfully sent notifications',
+    labelNames: ['channel'],
+    registers: [this.registry],
+  });
+
+  private readonly sentFailedTotal = new Counter<'channel'>({
+    name: 'sent_failed_total',
+    help: 'Total number of failed notification send attempts',
+    labelNames: ['channel'],
+    registers: [this.registry],
+  });
+
   constructor() {
     collectDefaultMetrics({ register: this.registry });
+  }
+
+  recordDelivery(channel: string, success: boolean): void {
+    const counter = success ? this.sentSuccessTotal : this.sentFailedTotal;
+    counter.inc({ channel: String(channel) });
   }
 
   recordRequest(

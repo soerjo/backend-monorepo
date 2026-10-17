@@ -4,4 +4,5 @@ export interface AuthUser {
   name: string | null;
   roles: string[];
   orgs: string[];
+  perms: string[];
 }

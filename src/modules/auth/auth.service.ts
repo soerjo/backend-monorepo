@@ -80,10 +80,38 @@ export class AuthService {
     return rows.map((row) => row.organization.name);
   }
 
+  private async loadPerms(userId: string): Promise<string[]> {
+    const rows = await this.prisma.userRole.findMany({
+      where: { userId },
+      select: {
+        role: {
+          select: {
+            rolePermissions: {
+              select: {
+                permission: {
+                  select: { name: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const permSet = new Set<string>();
+    for (const ur of rows) {
+      for (const rp of ur.role.rolePermissions) {
+        permSet.add(rp.permission.name);
+      }
+    }
+    return Array.from(permSet).sort();
+  }
+
   private async toAuthUser(user: User): Promise<AuthUser> {
-    const [roles, orgs] = await Promise.all([
+    const [roles, orgs, perms] = await Promise.all([
       this.loadRoles(user.id),
       this.loadOrgs(user.id),
+      this.loadPerms(user.id),
     ]);
 
     return {
@@ -92,6 +120,7 @@ export class AuthService {
       name: user.name,
       roles,
       orgs,
+      perms,
     };
   }
 
@@ -107,7 +136,7 @@ export class AuthService {
   }
 
   /**
-   * Signs a stateless RS256 access token carrying roles/orgs as claims so
+   * Signs a stateless RS256 access token carrying roles/orgs/perms as claims so
    * downstream services can authorize without calling UMS.
    */
   buildAccessToken(user: AuthUser): string {
@@ -117,6 +146,7 @@ export class AuthService {
       name: user.name,
       roles: user.roles,
       orgs: user.orgs,
+      perms: user.perms,
       azp: JWT_AZP,
     });
   }

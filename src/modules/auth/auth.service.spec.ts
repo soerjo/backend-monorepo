@@ -60,6 +60,7 @@ describe('AuthService', () => {
     name: 'Ada Lovelace',
     roles: ['ums:admin'],
     orgs: ['pesanggrahan'],
+    perms: ['users:read'],
   };
 
   beforeEach(() => {
@@ -272,10 +273,12 @@ describe('AuthService', () => {
   });
 
   describe('validateUser', () => {
-    it('returns roles/orgs for valid credentials', async () => {
+    it('returns roles/orgs/perms for valid credentials', async () => {
       const passwordHash = await hashPassword('secret-password');
       findByEmail.mockResolvedValue({ ...fullUser, passwordHash });
-      userRoleFindMany.mockResolvedValue([{ role: { name: 'ums:admin' } }]);
+      userRoleFindMany.mockResolvedValue([
+        { role: { name: 'ums:admin', rolePermissions: [{ permission: { name: 'users:read' } }] } },
+      ]);
       orgMemberFindMany.mockResolvedValue([
         { organization: { name: 'pesanggrahan' } },
       ]);

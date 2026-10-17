@@ -530,3 +530,23 @@ Task: cleanup batch including deleting `vercel.json`, removing unused devDepende
 
 - [x] **14. Final gates**
   - `bunx tsc --noEmit` (exit 0), `bunx eslint "src/**/*.ts" "test/**/*.ts"` (exit 0), `bun run build` (exit 0), `bun run test` (exit 0 — 13 suites / 82 tests). Fixed 9 `no-unsafe-member-access` errors in `notifications.service.spec.ts` (4) and `notifications.dispatcher.spec.ts` (5) by typing the jest mock generics (`jest.Mock<TReturn, TArgs>` / `jest.fn<TReturn, TArgs>()`) and a `CreateNotificationInput`/`DeliveryLogInput` typed call shape instead of indexing `any`; removed the now-redundant assertions ESLint flagged.
+
+## Implementation checklist: idempotency dedupe fix
+
+Task: live smoke test showed `POST /api/v1/notifications/send` with the same `idempotency_key` created duplicate rows. Fix so a duplicate key returns the existing row(s) with 200 instead of inserting.
+
+### Root cause (verified against the live DB, read-only)
+
+`deriveIdempotencyKey` stored the caller key **verbatim** for a `1 recipient × 1 channel` request but `<key>::<channel>::<recipient>` for batch/multi-channel. The DB `UNIQUE(idempotency_key)` index therefore only deduped requests with an identical fan-out shape. The smoke test's second call used the same key with a different channel list, so `findByIdempotencyKey` missed and inserted a new row. Live rows proved it: `smoke-001::SOCKET_IO::usr_smoke_1` + `smoke-001::EMAIL::usr_smoke_1` (trace `bf7754c2`, first call) and `smoke-001` (trace `e436f877`, second call).
+
+### Fix
+
+- `NotificationsRepository.findByBaseIdempotencyKey(baseKey)` — `findMany` matching `idempotencyKey = base` OR `idempotencyKey LIKE '<base>::%'`, ordered by `createdAt asc`.
+- `NotificationsService.send` — pre-check the base key before building/creating anything; if any row exists, return **all** of them (`notification_ids`), the **original** `trace_id` (first-created row), and `idempotent: true` → controller replies **200**. Existing per-item `persist` + P2002 race handling unchanged.
+- Kept the single-column `UNIQUE(idempotency_key)` index (per-row guarantee) and added `notifications_idempotency_key_pattern_idx` (`text_pattern_ops`) so the prefix group lookup can use an index under non-C collations.
+- Migration `prisma/migrations/20261017122220_idempotency_unique/migration.sql` (generated via `prisma migrate diff`, plus a defensive `CREATE UNIQUE INDEX IF NOT EXISTS` for the existing invariant). Parent runs the migration.
+
+### Gates
+
+- `bunx tsc --noEmit` exit 0; `bunx eslint "src/**/*.ts" "test/**/*.ts"` exit 0; `bun run build` exit 0; `bun run test` exit 0 (13 suites / 83 tests — +1 cross-shape duplicate test).
+- Live-DB read-only proof: group lookup for base `smoke-001` returns all 3 rows with `trace_id = bf7754c2` (original), i.e. `idempotent = true`, no new insert.

@@ -36,9 +36,24 @@ export class NotificationsService {
   ) {}
 
   async send(dto: SendNotificationDto): Promise<SendResult> {
+    const baseIdempotencyKey = dto.idempotency_key.slice(
+      0,
+      MAX_IDEMPOTENCY_KEY_LENGTH,
+    );
+
+    const existing =
+      await this.repository.findByBaseIdempotencyKey(baseIdempotencyKey);
+    if (existing.length > 0) {
+      return {
+        notificationIds: existing.map((notification) => notification.id),
+        traceId: existing[0].traceId,
+        idempotent: true,
+      };
+    }
+
     const traceId = dto.trace_id ?? randomUUID();
     const recipients = this.buildRecipients(dto);
-    const items = this.buildItems(dto, recipients, traceId);
+    const items = this.buildItems(dto, recipients, traceId, baseIdempotencyKey);
 
     const notificationIds: string[] = [];
     let createdAny = false;
@@ -86,6 +101,7 @@ export class NotificationsService {
     dto: SendNotificationDto,
     recipients: ResolvedRecipient[],
     traceId: string,
+    baseIdempotencyKey: string,
   ): CreateNotificationInput[] {
     const items: CreateNotificationInput[] = [];
 
@@ -100,7 +116,7 @@ export class NotificationsService {
         items.push({
           traceId,
           idempotencyKey: this.deriveIdempotencyKey(
-            dto.idempotency_key,
+            baseIdempotencyKey,
             recipients.length,
             dto.channels.length,
             channel,

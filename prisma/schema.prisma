@@ -85,6 +85,7 @@ model Notification {
 
   @@index([traceId])
   @@index([status])
+  @@index([idempotencyKey(ops: raw("text_pattern_ops"))], map: "notifications_idempotency_key_pattern_idx")
   @@map("notifications")
 }
 

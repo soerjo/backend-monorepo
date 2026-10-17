@@ -168,6 +168,13 @@ export class ContentRepository {
     return latest ? latest.version : 0;
   }
 
+  async delete(id: string) {
+    await this.findById(id);
+    return this.prisma.contentEntry.delete({
+      where: { id },
+    });
+  }
+
   async setTags(entryId: string, tagIds: string[]) {
     await this.findById(entryId);
     await this.prisma.contentTag.deleteMany({ where: { entryId } });

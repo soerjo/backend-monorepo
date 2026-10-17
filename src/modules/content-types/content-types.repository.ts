@@ -72,11 +72,20 @@ export class ContentTypesRepository {
     const item = await this.findById(id);
     if (item._count.entries > 0) {
       throw new ConflictException(
-        'Cannot delete ContentType that has associated entries',
+        'masih ada entries yang memakai content type ini',
       );
     }
-    return this.prisma.contentType.delete({
-      where: { id },
-    });
+    try {
+      return await this.prisma.contentType.delete({
+        where: { id },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2003') {
+        throw new ConflictException(
+          'masih ada entries yang memakai content type ini',
+        );
+      }
+      throw error;
+    }
   }
 }

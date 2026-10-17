@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { OrganizationsRepository } from './organizations.repository.js';
 import { CreateOrganizationDto } from './dto/create-organization.dto.js';
 import { UpdateOrganizationDto } from './dto/update-organization.dto.js';
+import { AddMemberDto } from './dto/add-member.dto.js';
 
 @Injectable()
 export class OrganizationsService {
@@ -9,10 +10,6 @@ export class OrganizationsService {
 
   async findAll() {
     return this.organizationsRepository.findAll();
-  }
-
-  async findBySlug(slug: string) {
-    return this.organizationsRepository.findBySlug(slug);
   }
 
   async findById(id: string) {
@@ -24,13 +21,26 @@ export class OrganizationsService {
   }
 
   async update(id: string, dto: UpdateOrganizationDto) {
-    return this.organizationsRepository.update(
-      id,
-      dto as { [key: string]: unknown },
-    );
+    return this.organizationsRepository.update(id, dto);
   }
 
   async remove(id: string) {
     return this.organizationsRepository.remove(id);
+  }
+
+  async listMembers(id: string) {
+    return this.organizationsRepository.listMembers(id);
+  }
+
+  async addMember(id: string, dto: AddMemberDto) {
+    return this.organizationsRepository.addMember(
+      id,
+      dto.userId,
+      dto.role ?? 'member',
+    );
+  }
+
+  async removeMember(id: string, userId: string) {
+    return this.organizationsRepository.removeMember(id, userId);
   }
 }

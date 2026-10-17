@@ -1,31 +1,61 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma, UserStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { Prisma } from '@prisma/client';
+
+export const USER_DETAIL_SELECT = {
+  id: true,
+  email: true,
+  name: true,
+  status: true,
+  emailVerifiedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  userRoles: {
+    select: { role: { select: { id: true, name: true } } },
+  },
+  orgMembers: {
+    select: {
+      role: true,
+      organization: { select: { id: true, name: true } },
+    },
+  },
+} satisfies Prisma.UserSelect;
 
 @Injectable()
 export class UsersRepository {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
-    return this.prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+  async findAll({ skip, take }: { skip: number; take: number }) {
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        select: USER_DETAIL_SELECT,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.user.count(),
+    ]);
+
+    return { data, total };
   }
 
+  /** Full row (includes passwordHash) — internal auth use only. */
   async findById(id: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with id ${id} not found`);
+    }
+    return user;
+  }
+
+  async findByIdDetailed(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: {
-        organization: { select: { id: true, name: true } },
-      },
+      select: USER_DETAIL_SELECT,
     });
     if (!user) {
       throw new NotFoundException(`User with id ${id} not found`);
@@ -34,52 +64,39 @@ export class UsersRepository {
   }
 
   async findByEmail(email: string) {
-    return this.prisma.user.findUnique({
-      where: { email },
-    });
+    return this.prisma.user.findUnique({ where: { email } });
   }
 
-  async create(
-    data: Prisma.XOR<Prisma.UserCreateInput, Prisma.UserUncheckedCreateInput>,
-  ) {
-    return this.prisma.user.create({ data });
-  }
-
-  async update(id: string, data: { [key: string]: unknown }) {
+  async update(id: string, data: { name?: string; status?: UserStatus }) {
     await this.findById(id);
     return this.prisma.user.update({
       where: { id },
       data,
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: USER_DETAIL_SELECT,
     });
   }
 
-  async remove(id: string) {
-    await this.findById(id);
-    return this.prisma.user.delete({ where: { id } });
-  }
+  async assignRoles(userId: string, roleNames: string[]) {
+    await this.findById(userId);
 
-  async updatePassword(id: string, hashedPassword: string) {
-    return this.prisma.user.update({
-      where: { id },
-      data: { password: hashedPassword },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const uniqueNames = [...new Set(roleNames)];
+    const roles = await this.prisma.role.findMany({
+      where: { name: { in: uniqueNames } },
     });
+
+    const foundNames = roles.map((role) => role.name);
+    const missing = uniqueNames.filter((name) => !foundNames.includes(name));
+    if (missing.length > 0) {
+      throw new BadRequestException(`Unknown roles: ${missing.join(', ')}`);
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.userRole.deleteMany({ where: { userId } }),
+      this.prisma.userRole.createMany({
+        data: roles.map((role) => ({ userId, roleId: role.id })),
+      }),
+    ]);
+
+    return this.findByIdDetailed(userId);
   }
 }

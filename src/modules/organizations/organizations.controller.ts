@@ -7,54 +7,66 @@ import {
   Param,
   Body,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { OrganizationsService } from './organizations.service.js';
 import { CreateOrganizationDto } from './dto/create-organization.dto.js';
 import { UpdateOrganizationDto } from './dto/update-organization.dto.js';
+import { AddMemberDto } from './dto/add-member.dto.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
-import { Public } from '../../common/decorators/public.decorator.js';
+import { UMS_ADMIN_ROLE } from '../auth/auth.constants.js';
 
 @ApiTags('Organizations')
 @ApiBearerAuth()
-@Controller('organizations')
+@Roles(UMS_ADMIN_ROLE)
+@Controller('orgs')
 export class OrganizationsController {
   constructor(private readonly organizationsService: OrganizationsService) {}
 
   @Get()
-  @Public()
-  // @Roles('ADMIN')
+  @ApiOperation({ summary: 'List organizations' })
   async findAll() {
     return this.organizationsService.findAll();
   }
 
-  @Get(':id')
-  @Public()
-  // @Roles('ADMIN')
-  async findOne(@Param('id') id: string) {
-    return this.organizationsService.findById(id);
-  }
-
-  @Get('slug/:slug')
-  @Public()
-  async findBySlug(@Param('slug') slug: string) {
-    return this.organizationsService.findBySlug(slug);
-  }
-
   @Post()
-  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Create an organization' })
   async create(@Body() dto: CreateOrganizationDto) {
     return this.organizationsService.create(dto);
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get an organization by id' })
+  async findOne(@Param('id') id: string) {
+    return this.organizationsService.findById(id);
+  }
+
   @Patch(':id')
-  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Update an organization' })
   async update(@Param('id') id: string, @Body() dto: UpdateOrganizationDto) {
     return this.organizationsService.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Delete an organization' })
   async remove(@Param('id') id: string) {
     return this.organizationsService.remove(id);
+  }
+
+  @Get(':id/members')
+  @ApiOperation({ summary: 'List organization members' })
+  async listMembers(@Param('id') id: string) {
+    return this.organizationsService.listMembers(id);
+  }
+
+  @Post(':id/members')
+  @ApiOperation({ summary: 'Add or update an organization member' })
+  async addMember(@Param('id') id: string, @Body() dto: AddMemberDto) {
+    return this.organizationsService.addMember(id, dto);
+  }
+
+  @Delete(':id/members/:userId')
+  @ApiOperation({ summary: 'Remove an organization member' })
+  async removeMember(@Param('id') id: string, @Param('userId') userId: string) {
+    return this.organizationsService.removeMember(id, userId);
   }
 }

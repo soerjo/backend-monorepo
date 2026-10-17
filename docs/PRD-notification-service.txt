@@ -1,0 +1,44 @@
+Product Requirement Document (PRD)1. Overview & ObjectivesNama Service: notification-service (Notification & Dispatch Hub)Status: Draft / ProposedObjective: Menyediakan service terpusat yang tangguh (reliable), terisolasi, dan scalable untuk mengirimkan notifikasi multi-channel (Socket.IO, Telegram Bot, Email, dan channel tambahan) serta mencatat riwayat (log/audit trail) pengiriman secara terstruktur untuk analitik dan penanganan error.2. Channel Delivery: Cakupan & Rekomendasi TambahanCore Channels (Permintaan Utama)Socket.IO (In-App / Real-time Web & Mobile):Digunakan untuk notifikasi langsung saat user sedang membuka aplikasi (pop-up toast, floating banner, update badge counter).Menghubungkan client lewat room/channel berdasarkan user_id atau tenant_id.Telegram Bot API:Pengiriman pesan instan, alerting sistem ke developer/tim internal, atau pengingat transaksi ke end-user via Telegram Chat ID.Email (SMTP / Provider API):Notifikasi formal, laporan berkala, verifikasi OTP, atau transaksional (invoice/billing). Support HTML template (liquid/handlebars).Rekomendasi Channel Tambahan yang Sangat BernilaiMobile Push Notification (Firebase Cloud Messaging / FCM / APNs):Kenapa krusial: Socket.IO hanya jalan jika user sedang aktif membuka tab/aplikasi (foreground). FCM menjangkau smartphone user saat aplikasi background atau layar terkunci.WhatsApp Business API / Twilio:Cocok untuk pasar Indonesia dan Asia Tenggara di mana engagement rate WhatsApp jauh lebih tinggi dibanding Email untuk hal kritikal (misal: OTP, reminder appointment, billing overdue).Internal Webhook Dispatcher:Memungkinkan service lain (third-party atau microservice lain) mendaftarkan callback URL untuk menerima event notifikasi secara otomatis.3. High-Level Architecture & Flow[Producer / Core Services]
+          │
+          │ (REST API / Message Broker: Redis Stream / RabbitMQ / Kafka)
+          ▼
+┌────────────────────────────────────────────────────────┐
+│               NOTIFICATION SERVICE                     │
+│                                                        │
+│  ┌──────────────────┐        ┌──────────────────────┐  │
+│  │ Ingestion & Auth │───────▶│ Template & Renderer  │  │
+│  └──────────────────┘        └──────────────────────┘  │
+│           │                             │              │
+│           ▼                             ▼              │
+│  ┌──────────────────┐        ┌──────────────────────┐  │
+│  │ Channel Router   │───────▶│ Dispatch Workers     │  │
+│  └──────────────────┘        │ (Retry + Exponential)│  │
+│           │                  └──────────────────────┘  │
+│           ▼                             │              │
+│  ┌──────────────────────────────────────┴───────────┐  │
+│  │ Log & Audit Engine (PostgreSQL / TimescaleDB)   │  │
+│  └──────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────┘
+          │               │               │
+          ▼               ▼               ▼
+    [Socket.IO]    [Telegram Bot]     [Email / FCM]
+4. Functional Requirements4.1 Ingestion & Dispatch EngineSingle / Batch Send Endpoint: Mampu menerima single recipient maupun broadcast/multicast list.Multi-channel Fallback Policy: Opsi untuk fallback antar channel (misal: jika Socket.IO gagal / user offline, sistem otomatis kirim fallback via Telegram atau Email).Idempotency: Dilengkapi dengan idempotency_key untuk mencegah duplicate notifications saat terjadi retry network timeout dari sisi caller.Rate Limiting: Rate limit per client/API key dan throttle per destination provider (misal: Telegram Bot API limit 30 msg/second).4.2 Logging & Audit TrailSetiap request yang masuk wajib mencatat lifecycle notifikasi:PENDING $\rightarrow$ QUEUED $\rightarrow$ SENDING $\rightarrow$ DELIVERED atau FAILED.Detail Log yang Disimpan:Identifier: notification_id, idempotency_key, trace_id.Recipient info: Target user ID, channel type, destination (chat_id, email, socket room).Payload snapshot: Title, body, metadata (opsional mask data sensitif seperti password/OTP).Delivery metric: Latency (waktu dispatch vs waktu ack provider), provider response code, retry count, error message.4.3 Template EngineDynamic templating engine (Handlebars/Mustache) untuk merender subject dan body teks/HTML.Support placeholder variabel (contoh: {{name}}, {{action_url}}, {{order_id}}).5. Data Model / Schema (Database Design)Table: notificationsFieldTypeDescriptionidUUID (PK)Unique Notification IDtrace_idVARCHAR(64)Distributed tracing IDchannelENUM'SOCKET_IO', 'TELEGRAM', 'EMAIL', 'FCM', 'WHATSAPP'recipient_idVARCHAR(128)User ID internal sistemrecipient_targetVARCHAR(255)Socket Room / Telegram Chat ID / Email Addresstemplate_codeVARCHAR(64)Identifier template (nullable)titleVARCHAR(255)Judul notifikasicontentTEXTRendered message text/HTMLpayloadJSONBContextual data / original payloadstatusENUM'PENDING', 'PROCESSING', 'SENT', 'FAILED', 'RETRY'retry_countINTJumlah percobaan ulangcreated_atTIMESTAMPTZWaktu record dibuatupdated_atTIMESTAMPTZWaktu update terakhirTable: notification_delivery_logsFieldTypeDescriptionidBIGSERIAL (PK)Log entry IDnotification_idUUID (FK)Reference ke table notificationsattemptINTNomor percobaan dispatchstatusENUM'SUCCESS', 'FAILED'provider_responseJSONBRaw response / error dump dari 3rd party (Telegram, SMTP, dll)latency_msINTDurasi dispatch request dalam mscreated_atTIMESTAMPTZWaktu dispatch dijalankan6. API Specification (Core Endpoints)POST /api/v1/notifications/sendRequest Body:JSON{
+  "idempotency_key": "unique-req-uuid-1234",
+  "recipient_id": "usr_9981",
+  "channels": ["SOCKET_IO", "TELEGRAM"],
+  "destination": {
+    "telegram_chat_id": "987654321",
+    "socket_room": "room_usr_9981",
+    "email": "user@example.com"
+  },
+  "content": {
+    "title": "Transaksi Berhasil",
+    "body": "Pembayaran Anda sebesar Rp 150.000 telah diverifikasi.",
+    "action_url": "https://app.domain.com/orders/123"
+  },
+  "metadata": {
+    "source_service": "billing-service",
+    "priority": "HIGH"
+  }
+}
+GET /api/v1/notifications/:id/logsMengambil riwayat audit log lengkap dari notifikasi tertentu untuk kebutuhan debugging atau dashboard status delivery.7. Non-Functional Requirements (NFR)Resilience & Fault Tolerance:Pengiriman ke channel eksternal (Telegram, SMTP) harus menggunakan asynchronous worker/queue (misal: BullMQ/Redis) agar tidak memblokir HTTP response ke service pemanggil.Exponential Backoff retry policy (misal: retry 3 kali dengan interval 2s, 8s, 30s).Performance:Response time Ingestion API $\le$ 150ms (hanya melakukan enqueue & initial log save).Security & Compliance:Service-to-service authentication menggunakan Bearer API Token / mTLS.Sanitasi dan masking untuk field sensitif (nomor rekening, password token) sebelum log di-persist ke database.Observability:Structured JSON Logging (pino / winston).Metrics counter untuk monitoring rate sent_success_total vs sent_failed_total per channel.

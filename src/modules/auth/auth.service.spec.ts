@@ -356,4 +356,46 @@ describe('AuthService', () => {
       ).rejects.toThrow('Email already in use');
     });
   });
+
+  describe('cleanupExpiredSessions', () => {
+    it('deletes sessions with expiresAt in the past', async () => {
+      sessions.push(
+        {
+          id: 'exp-1',
+          userId: 'user-1',
+          refreshHash: 'hash-1',
+          family: 'fam-1',
+          userAgent: null,
+          ip: null,
+          expiresAt: new Date(Date.now() - 10000),
+          revokedAt: null,
+          replacedByHash: null,
+        },
+        {
+          id: 'valid-1',
+          userId: 'user-1',
+          refreshHash: 'hash-2',
+          family: 'fam-2',
+          userAgent: null,
+          ip: null,
+          expiresAt: new Date(Date.now() + 10000),
+          revokedAt: null,
+          replacedByHash: null,
+        },
+      );
+
+      const deleteManyMock = jest.fn().mockResolvedValue({ count: 1 });
+      (service as any).prisma.session.deleteMany = deleteManyMock;
+
+      const count = await service.cleanupExpiredSessions();
+      expect(count).toBe(1);
+      expect(deleteManyMock).toHaveBeenCalledWith({
+        where: {
+          expiresAt: {
+            lt: expect.any(Date),
+          },
+        },
+      });
+    });
+  });
 });

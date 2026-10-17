@@ -295,6 +295,17 @@ export class AuthService {
     return this.toAuthUser(user);
   }
 
+  async cleanupExpiredSessions(): Promise<number> {
+    const result = await this.prisma.session.deleteMany({
+      where: {
+        expiresAt: {
+          lt: new Date(),
+        },
+      },
+    });
+    return result.count;
+  }
+
   get accessTokenExpiresInSeconds(): number {
     return this.accessTokenTtlSeconds;
   }

@@ -2,6 +2,7 @@ import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsPort,
   IsString,
@@ -70,6 +71,14 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   CORS_ORIGINS?: string;
+
+  @IsNumber()
+  @IsOptional()
+  THROTTLE_TTL_MS: number = 60000;
+
+  @IsNumber()
+  @IsOptional()
+  THROTTLE_LIMIT: number = 10;
 
   @IsString()
   @IsOptional()

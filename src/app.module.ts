@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { WinstonModule } from 'nest-winston';
@@ -18,7 +18,16 @@ import { validate } from './config/env.validation.js';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate }),
     WinstonModule.forRoot(loggerConfig),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => [
+        {
+          ttl: configService.get<number>('THROTTLE_TTL_MS', 60000),
+          limit: configService.get<number>('THROTTLE_LIMIT', 10),
+        },
+      ],
+    }),
     PrismaModule,
     AuthModule,
     UsersModule,

@@ -18,10 +18,12 @@ import {
 } from '@nestjs/swagger';
 import { MediaService } from './media.service.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { Roles } from '../../common/decorators/roles.decorator.js';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 
 @ApiTags('Media')
 @ApiBearerAuth()
+@Roles('ums:admin')
 @Controller('media')
 export class MediaController {
   constructor(private service: MediaService) {}

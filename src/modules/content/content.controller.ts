@@ -24,6 +24,7 @@ import {
   UpdateContentTagsDto,
 } from './dto/update-content-entry.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { Roles } from '../../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import { ContentStatus } from '@prisma/client';
@@ -31,6 +32,7 @@ import { ContentStatus } from '@prisma/client';
 @ApiTags('content')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
+@Roles('ums:admin')
 @Controller('content/entries')
 export class ContentController {
   constructor(private readonly contentService: ContentService) {}

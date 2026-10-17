@@ -11,9 +11,11 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { TagsService } from './tags.service.js';
 import { CreateTagDto } from './dto/create-tag.dto.js';
 import { UpdateTagDto } from './dto/update-tag.dto.js';
+import { Roles } from '../../common/decorators/roles.decorator.js';
 
 @ApiTags('Tags')
 @ApiBearerAuth()
+@Roles('ums:admin')
 @Controller('tags')
 export class TagsController {
   constructor(private service: TagsService) {}

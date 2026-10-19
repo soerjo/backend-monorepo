@@ -256,6 +256,31 @@ export class AuthService {
     };
   }
 
+  /**
+   * Issues a fresh token pair for an already-authenticated user
+   * (used by the MFA challenge flow after successful TOTP verification).
+   */
+  async issueTokensForUser(
+    userId: string,
+    meta: RequestMeta = {},
+  ): Promise<IssuedTokens> {
+    const user = await this.usersRepository.findById(userId).catch(() => null);
+    if (!user || user.status !== $Enums.UserStatus.ACTIVE) {
+      throw new UnauthorizedException('User is not active');
+    }
+    const authUser = await this.toAuthUser(user);
+    const { refreshToken } = await this.createSession(
+      user.id,
+      randomUUID(),
+      meta,
+    );
+    return {
+      accessToken: this.buildAccessToken(authUser),
+      refreshToken,
+      user: authUser,
+    };
+  }
+
   async refresh(
     rawToken: string,
     meta: RequestMeta = {},

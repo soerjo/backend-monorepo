@@ -7,10 +7,7 @@ import {
 import { randomBytes } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { FederationRepository } from './federation.repository.js';
-import {
-  decryptSecret,
-  encryptSecret,
-} from '../mfa/encryption.util.js';
+import { decryptSecret, encryptSecret } from '../mfa/encryption.util.js';
 
 interface DiscoveredEndpoints {
   authorization_endpoint: string;
@@ -44,7 +41,10 @@ export class FederationService {
     configService: ConfigService,
   ) {
     this.appKey = configService.get<string>('APP_ENCRYPTION_KEY') ?? '';
-    this.webUrl = (configService.get<string>('APP_WEB_URL') ?? '').replace(/\/$/, '');
+    this.webUrl = (configService.get<string>('APP_WEB_URL') ?? '').replace(
+      /\/$/,
+      '',
+    );
   }
 
   private async discover(issuer: string): Promise<DiscoveredEndpoints> {

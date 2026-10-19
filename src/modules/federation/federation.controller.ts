@@ -10,11 +10,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import {
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UMS_ADMIN_ROLE } from '../auth/auth.constants.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { FederationService } from './federation.service.js';
@@ -47,7 +43,10 @@ export class FederationAdminController {
   @Roles(UMS_ADMIN_ROLE)
   @ApiOperation({ summary: 'Update an identity provider' })
   update(@Param('id') id: string, @Body() dto: UpdateIdentityProviderDto) {
-    return this.federation.update(id, dto as unknown as Record<string, unknown>);
+    return this.federation.update(
+      id,
+      dto as unknown as Record<string, unknown>,
+    );
   }
 
   @Delete(':id')
@@ -92,7 +91,10 @@ export class FederationBrowserController {
         ip: res.req.ip,
         userAgent: res.req.headers['user-agent'],
       });
-      const webUrl = (this.config.get<string>('APP_WEB_URL') ?? '/').replace(/\/$/, '');
+      const webUrl = (this.config.get<string>('APP_WEB_URL') ?? '/').replace(
+        /\/$/,
+        '',
+      );
       res.cookie('ums_refresh_token', tokens.refreshToken, {
         httpOnly: true,
         sameSite: 'lax',

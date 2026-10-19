@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
-import { FederationAdminController, FederationBrowserController } from './federation.controller.js';
+import {
+  FederationAdminController,
+  FederationBrowserController,
+} from './federation.controller.js';
 import { FederationService } from './federation.service.js';
 import { FederationRepository } from './federation.repository.js';
 

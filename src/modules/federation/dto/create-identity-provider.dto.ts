@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, IsUrl, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUrl,
+  MinLength,
+} from 'class-validator';
 
 export class CreateIdentityProviderDto {
   @ApiProperty({ example: 'company-google' })
@@ -16,7 +22,9 @@ export class CreateIdentityProviderDto {
   @MinLength(8)
   clientId!: string;
 
-  @ApiProperty({ description: 'Client secret — stored encrypted, never returned' })
+  @ApiProperty({
+    description: 'Client secret — stored encrypted, never returned',
+  })
   @IsString()
   @MinLength(8)
   clientSecret!: string;

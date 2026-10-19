@@ -261,7 +261,10 @@ export class AuthService {
    * v1 policy: no auto-provisioning — the email must already match an ACTIVE
    * user (explicit linking). See platform-docs Q5 / ADR 0006.
    */
-  async federatedLogin(email: string, meta: RequestMeta = {}): Promise<{
+  async federatedLogin(
+    email: string,
+    meta: RequestMeta = {},
+  ): Promise<{
     accessToken: string;
     refreshToken: string;
     user: AuthUser;

@@ -56,12 +56,16 @@ export class AuthController {
     @Req() req: Request & { user: AuthUser },
     @Res({ passthrough: true }) res: Response,
   ) {
-    const tokens = await this.authService.login(
+    const result = await this.authService.login(
       req.user,
       this.requestMeta(req),
     );
-    this.setRefreshCookie(res, tokens.refreshToken);
-    return tokens;
+    if ('mfaRequired' in result) {
+      // MFA must be satisfied before any session/token is issued.
+      return result;
+    }
+    this.setRefreshCookie(res, result.refreshToken);
+    return result;
   }
 
   @Public()

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -15,6 +15,7 @@ import { computeKeyId } from '../../common/utils/jwk.util.js';
 import { AuthTokensRepository } from './auth-tokens.repository.js';
 import { MailModule } from '../mail/mail.module.js';
 import { AuditModule } from '../audit/audit.module.js';
+import { MfaModule } from '../mfa/mfa.module.js';
 import { JWT_ISSUER } from './auth.constants.js';
 import type { JwtModuleOptions } from '@nestjs/jwt';
 
@@ -24,6 +25,7 @@ import type { JwtModuleOptions } from '@nestjs/jwt';
     UsersModule,
     MailModule,
     AuditModule,
+    forwardRef(() => MfaModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

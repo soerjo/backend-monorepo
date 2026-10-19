@@ -9,6 +9,7 @@ import { generateSecret, generateURI, verify } from 'otplib';
 import { MfaRepository } from './mfa.repository.js';
 import { UsersService } from '../users/users.service.js';
 import { AuthService } from '../auth/auth.service.js';
+import { Inject, forwardRef } from '@nestjs/common';
 import { encryptSecret, decryptSecret } from './encryption.util.js';
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -36,8 +37,18 @@ export class MfaService {
   constructor(
     private readonly mfaRepository: MfaRepository,
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
   ) {}
+
+  /** True when the user has an enabled TOTP factor and must pass a challenge. */
+  async isEnabled(userId: string): Promise<boolean> {
+    const factor = await this.mfaRepository.findActiveByUserAndType(
+      userId,
+      'totp',
+    );
+    return Boolean(factor && factor.enabled);
+  }
 
   async enroll(userId: string): Promise<EnrollResult> {
     const existing = await this.mfaRepository.findByUser(userId);

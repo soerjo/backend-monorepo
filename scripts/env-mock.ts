@@ -1,0 +1,10 @@
+/**
+ * Dummy environment for OpenAPI contract generation.
+ * MUST be imported FIRST in generate-openapi.ts so it runs before
+ * any module that evaluates ConfigModule.forRoot() validation.
+ */
+process.env.DATABASE_URL ??= 'postgresql://dummy:dummy@localhost:5432/dummy?schema=public';
+process.env.UMS_JWT_PRIVATE_KEY ??= '-----BEGIN PRIVATE KEY-----\nMIIEuwIBADANBgkqhkiG9w0BAQEFAASCBKUwggShAgEAAoIBAQC+0bvepupNzTce\nuN5fPvEf0gCls98FX5JTmZ75X7FlScxLhJDzU/Wob8Caqd+gd4L5H7gpGkrMRqua\nZCUjoJzCq4PJpVBMFPhlOIcHRJacyDJCxB2PHEo3NGokaBMnI/Qv6FwRQh5ZLXJF\nGl2+2MjXK3gHjyeepCN34J7F9c0VYw8Ga4FIYoGrYNqwRac5lucMCozn7kaMgs6v\nWsquysijslKrnFdWN8vx+LrPpkGpUHFQAFZzhC7VNxF1W2WgSAB8GKZwv6VSMnL0\nJK77XEFDRkW2u0CWDtAcic7QLnhBdvYWgHGyxPU/SK24eI0eJJ1X6iM4pBvm0PW4\nQYGoUV8lAgMBAAECgf9iY8J7C5XEiAvjy27drZam0aGDzzsvihfpA0z1SGIv191/\nEtuqm6APOZAWL4EfPIBL9A8BIo1uxwG0me6McERkHAvX7WV51VY+2ubE2JjQPmms\nA3M6V1vtGxmfrAo0JFXEXgsa2vzK/qPs/atYvG7Sg5dgTnAfXILtTOSRLiyQ2Z72\nHTQqqWQB6inXA1l80T4XW7d2/7MlVIwccmBrJYa+1+VX7Y4aQfiEZbyAOGC5wQVc\nlpzCocI5uou8MMedhMd9qbI73WaAGm+bXyAK4jJkrp+spNehCKoYb5ug1PSIqYBg\n14RuqeLzWjEc7rl/Lbfgr7PTd7KU9z/eis7VaQECgYEA3wQfI5RQ/p7lI9Knl09j\nhb1WJAvmDzVwNfAQ6sC76PtLZu+GJtxaQxdD23LtKIERCKXvhL4SIRPdlahI9twc\nCMEosrUFznS/uiuzl5oLObyCFCJ205RihpYaQqtgfr4h7oKIwe4IZmMVFmgNMc5J\n/d56SSlj7i7wbN/t+7o6iVECgYEA2wqR3SixZpl3gQnhktKasP/2uLe8QrIqduvn\n9YZBZ5/tb0BOoObVooDHxljtsnlyUxtO7h+jeLLUG98JrTQT7gPG3Kku6Yz0yNw1\nfV1rt3ls40/ek0PaQ3TJVbdYer5BkTJU+t+Jg/jUSNX/EMhIwFW+PeoSjpePaDHx\nPXGLg5UCgYAWlcdFhiaxsovIFfRM+Yg9qhAINIBG+AV2IOrFq2EcVh6rvQQb+WLW\nuotvtPLZkECWXJ+mFM2nNejR2CoTffUE2fLyLiz5XI9yHizg5IPQhAu0WE0qXjOg\nJ6FfMRXjoAO1sNiCs0V8gPpIu57idV6+7AH8WMm6/Fvy2rayMIjvEQKBgQCpExiS\naKW+t3kqLpFi/pOPSpSL8q8roFDs6J1sxIvZy/W/aRkIVAXVYKhT7zLTD7FyeuLL\nJbrOIONe/COBAXDcySeIDkN63WXZYTkcoq7RubWWJIF+lOJ2LUB3nIV8gT0lMX+t\nAj0olDpwWlZ/Aso9RDILopFeZZi5act3jRyOnQKBgAnpKd61/L2br4Br13cXs1J0\nc1wwDI/pwJ3BDIR8cEgrCD1QaXcfJ/mVbSzhcfzNRPTThFl2BiXCs9xln5YmAvVr\ngi6163lGd3ULj80H3hy2P1mku2xAzCWn7b06parNCp21nXCHon+XRnqcGy/yhmEl\npCQW/tFFk/dgIYtpdvxI\n-----END PRIVATE KEY-----\n';
+process.env.JWT_EXPIRES_IN ??= '1h';
+process.env.PORT ??= '3000';
+process.env.NODE_ENV ??= 'development';

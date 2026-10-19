@@ -1,0 +1,2 @@
+# Mark generated files to exclude them from GitHub stats/diffs.
+contracts/openapi.json linguist-generated=true

@@ -277,7 +277,12 @@ describe('AuthService', () => {
       const passwordHash = await hashPassword('secret-password');
       findByEmail.mockResolvedValue({ ...fullUser, passwordHash });
       userRoleFindMany.mockResolvedValue([
-        { role: { name: 'ums:admin', rolePermissions: [{ permission: { name: 'users:read' } }] } },
+        {
+          role: {
+            name: 'ums:admin',
+            rolePermissions: [{ permission: { name: 'users:read' } }],
+          },
+        },
       ]);
       orgMemberFindMany.mockResolvedValue([
         { organization: { name: 'pesanggrahan' } },
@@ -388,14 +393,19 @@ describe('AuthService', () => {
       );
 
       const deleteManyMock = jest.fn().mockResolvedValue({ count: 1 });
-      (service as any).prisma.session.deleteMany = deleteManyMock;
+      const prismaRef = (
+        service as unknown as {
+          prisma: { session: { deleteMany: jest.Mock } };
+        }
+      ).prisma;
+      prismaRef.session.deleteMany = deleteManyMock;
 
       const count = await service.cleanupExpiredSessions();
       expect(count).toBe(1);
       expect(deleteManyMock).toHaveBeenCalledWith({
         where: {
           expiresAt: {
-            lt: expect.any(Date),
+            lt: expect.any(Date) as Date,
           },
         },
       });

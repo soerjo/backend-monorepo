@@ -65,9 +65,7 @@ describe('RolesService', () => {
         _count: { userRoles: 3 },
       });
 
-      await expect(service.remove('role-2')).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(service.remove('role-2')).rejects.toThrow(ConflictException);
     });
 
     it('deletes successfully if safe', async () => {

@@ -46,7 +46,9 @@ export class PermissionsController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a permission (protected if assigned to any role)' })
+  @ApiOperation({
+    summary: 'Delete a permission (protected if assigned to any role)',
+  })
   async remove(@Param('id') id: string) {
     return this.permissionsService.remove(id);
   }

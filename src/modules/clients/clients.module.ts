@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import type { JwtModuleOptions } from '@nestjs/jwt';
+import { forwardRef } from '@nestjs/common';
 import { JWT_ISSUER } from '../auth/auth.constants.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { JwtKeysService } from '../auth/jwt-keys.service.js';
@@ -19,9 +20,9 @@ import { WebhooksService } from './webhooks.service.js';
 
 @Module({
   imports: [
-    AuthModule,
+    forwardRef(() => AuthModule),
     JwtModule.registerAsync({
-      imports: [AuthModule],
+      imports: [forwardRef(() => AuthModule)],
       inject: [JwtKeysService],
       useFactory: (jwtKeysService: JwtKeysService): JwtModuleOptions => ({
         privateKey: jwtKeysService.privateKey,

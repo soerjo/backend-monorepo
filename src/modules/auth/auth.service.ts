@@ -1,3 +1,4 @@
+import { forwardRef } from '@nestjs/common';
 import {
   BadRequestException,
   Injectable,
@@ -24,6 +25,7 @@ import { AuthTokensRepository } from './auth-tokens.repository.js';
 import type { MailSender } from '../mail/mail.types.js';
 import { Inject } from '@nestjs/common';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
+import { WebhookDispatcherService } from '../clients/webhook-dispatcher.service.js';
 import type { RegisterDto } from './dto/register.dto.js';
 import { AuditService } from '../audit/audit.service.js';
 
@@ -57,6 +59,8 @@ export class AuthService {
     private authTokensRepository: AuthTokensRepository,
     @Inject('MailSender') private mailSender: MailSender,
     private auditService: AuditService,
+    @Inject(forwardRef(() => WebhookDispatcherService))
+    private readonly webhookDispatcherService: WebhookDispatcherService,
   ) {}
 
   private get accessTokenTtlSeconds(): number {
@@ -519,6 +523,9 @@ export class AuthService {
       actorId: authToken.userId,
       severity: 'warn',
     });
+    this.webhookDispatcherService
+      .dispatch('user.password_reset_completed', { userId: authToken.userId })
+      .catch(() => {});
   }
 
   /**
@@ -544,6 +551,9 @@ export class AuthService {
       action: 'auth.email_verified',
       actorId: authToken.userId,
     });
+    this.webhookDispatcherService
+      .dispatch('user.email_verified', { userId: authToken.userId })
+      .catch(() => {});
   }
 
   /**

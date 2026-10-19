@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { ClientsModule } from '../clients/clients.module.js';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -22,6 +23,7 @@ import type { JwtModuleOptions } from '@nestjs/jwt';
 @Module({
   imports: [
     PassportModule,
+    forwardRef(() => ClientsModule),
     UsersModule,
     MailModule,
     AuditModule,

@@ -9,6 +9,7 @@ import { generateSecret, generateURI, verify } from 'otplib';
 import { MfaRepository } from './mfa.repository.js';
 import { UsersService } from '../users/users.service.js';
 import { AuthService } from '../auth/auth.service.js';
+import { WebhookDispatcherService } from '../clients/webhook-dispatcher.service.js';
 import { encryptSecret, decryptSecret } from './encryption.util.js';
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -37,6 +38,7 @@ export class MfaService {
     private readonly mfaRepository: MfaRepository,
     private readonly usersService: UsersService,
     private readonly authService: AuthService,
+    private readonly webhookDispatcherService: WebhookDispatcherService,
   ) {}
 
   /** True when the user has an enabled TOTP factor and must pass a challenge. */
@@ -114,6 +116,9 @@ export class MfaService {
       recoveryCodes: hashedRecoveryCodes,
     });
 
+    this.webhookDispatcherService
+      .dispatch('user.mfa_enabled', { userId })
+      .catch(() => {});
     return { enabled: true, recoveryCodes };
   }
 
@@ -129,6 +134,9 @@ export class MfaService {
     }
 
     await this.mfaRepository.delete(factor.id);
+    this.webhookDispatcherService
+      .dispatch('user.mfa_disabled', { userId })
+      .catch(() => {});
   }
 
   /**

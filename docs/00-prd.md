@@ -46,14 +46,19 @@ beserta anggotanya.
 - Tidak menyimpan data domain milik service lain.
 - Tidak melakukan otorisasi atas resource milik service lain — UMS menyatakan *siapa* dan *peran
   apa*; keputusan akses atas resource adalah tanggung jawab service pemilik.
-- Bukan identity provider pihak ketiga (Google OAuth sudah dihapus dari jalur aktif).
+
+**Non-goal yang dicabut bersama di atas:** "tidak melayani konsumen di luar platform `soerjo/*`".
+Adanya client registry M2M dan billing per-seat di desain hanya masuk akal untuk konsumen eksternal
+(ADR 0006).
+- ~~Bukan identity provider pihak ketiga.~~ **Dicabut 19 Oktober 2026** (ADR 0006) — UMS akan
+  menjadi *service provider* terhadap IdP eksternal lewat federasi SAML 2.0 / OIDC. Google OAuth
+  bawaan template tetap dihapus; federasi nanti dibangun ulang dengan desain sendiri.
 
 ## Yang belum diputuskan
 
-- `[NEEDS INPUT]` Apakah UMS akan melayani konsumen di luar platform `soerjo/*` (multi-tenant
-  eksternal)? Ini menentukan perlu-tidaknya OAuth2 client registry.
 - `[NEEDS INPUT]` Apakah permission akan ditegakkan di UMS atau cukup dibawa sebagai klaim dan
-  ditegakkan masing-masing service?
+  ditegakkan masing-masing service? Desain memakai 21 entitlement granular, yang mengarah ke
+  penegakan di UMS — tetapi klaim token saat ini hanya membawa `roles[]`, bukan permission.
 - `[NEEDS INPUT]` Target SLA/ketersediaan. Saat ini seluruh platform berada di satu host.
 - `[NEEDS INPUT]` Kebijakan audit log: apa yang wajib tercatat dan berapa lama disimpan.
 
@@ -84,28 +89,39 @@ Kemampuan desain yang **sudah didukung sebagian** oleh skema sekarang:
 - **Matriks role × permission** — `Permission`, `RolePermission`, dan `PUT /roles/:id/permissions`
   sudah ada; desain hanya menuntut UI dan konvensi penamaan yang lebih kaya.
 
-> **Peringatan cakupan.** Jika desain ini diperlakukan sebagai spesifikasi pembangunan, isinya
-> setara beberapa kuartal kerja dan sekitar sepuluh tabel baru, bukan pekerjaan UI. Dokumen ini
-> mencatatnya sebagai **arah**, bukan sebagai komitmen. Pertanyaan yang harus dijawab lebih dulu
-> ada di `platform-docs/docs/07-open-architecture-questions.md`.
+**Desain ini sudah diadopsi sebagai arah produk** (ADR 0006, 19 Oktober 2026). Bukan lagi sekadar
+catatan desain.
 
-## Non-goals yang ditantang desain
+> **Peringatan cakupan yang tetap berlaku.** Mengadopsi arah **bukan** berarti membangun semuanya
+> berikutnya. Isinya setara beberapa kuartal kerja dan ~7 tabel baru. Setiap area besar (audit, MFA,
+> kebijakan keamanan, M2M, webhook, federasi, billing) menjadi **epic tersendiri dengan kontrak
+> beku**, bukan satu epic raksasa. Urutan yang diusulkan ada di `platform-docs/docs/roadmap.md`;
+> sub-pertanyaan yang masih memblokir tiap area ada di
+> `platform-docs/docs/07-open-architecture-questions.md`.
 
-Dua non-goal yang berlaku sekarang **bertentangan** dengan desain, dan konfliknya belum
-diselesaikan:
+## Batas yang tetap berlaku meski desain diadopsi
 
-- PRD ini menyatakan UMS *bukan* identity provider pihak ketiga. Desain memuat federasi SAML/OIDC.
-- PRD ini menyatakan UMS tidak melayani konsumen di luar platform. Desain memuat client registry
-  M2M dan billing per-seat, yang hanya masuk akal untuk konsumen eksternal.
-
-`[NEEDS INPUT]` Mana yang menang — PRD atau desain — adalah keputusan produk, bukan keputusan agent.
-Sampai diputuskan, non-goal di atas **tetap berlaku** dan layar-layar tersebut tidak diimplementasikan.
+- **Role tetap global.** ADR 0003 ditegaskan kembali (ADR 0005). "Realm Admin — DELEGATED" di desain
+  diimplementasikan sebagai role global `ums:realm-admin`; pembatasan per-organisasi terjadi di
+  **lapisan query**, bukan di definisi role. `user_roles` tidak ditambah `orgId`, dan klaim token
+  tidak berubah — jadi `wms-service`, `pos-service`, dan `my-cms-service` tidak terdampak.
+  **Risikonya berpindah, bukan hilang:** satu endpoint yang lupa memfilter berdasarkan keanggotaan
+  organisasi langsung menjadi privilege escalation lintas organisasi. Wajib ada test per endpoint.
+- **Istilah tetap "Organization"**, bukan "Realm" (ADR 0005). Label UI diterjemahkan saat
+  implementasi.
+- **SMS OTP tetap dilarang** sebagai faktor MFA — desain sendiri menandainya *Strictly Prohibited*;
+  alasannya kuat (rentan SIM-swap).
+- **Kolom tanpa sumber data tidak dirender** — Geolocation dan Risk Score menunggu sumber datanya ada.
+- **UMS tetap satu-satunya penerbit token platform.** Federasi menjadikan UMS service provider
+  terhadap IdP eksternal, tetapi token yang dikonsumsi service internal tetap terbit dari UMS.
 
 ## Sudah diputuskan
 
-- **Role bersifat global, bukan per-organisasi** (ADR 0003, 19 Oktober 2026). `user_roles` adalah
-  satu-satunya sumber peran otorisasi; `OrgMember.role` bukan peran otorisasi. Skema sekarang sudah
-  mendukung keputusan ini, jadi tidak ada migrasi yang diperlukan.
+- **Role bersifat global, bukan per-organisasi** (ADR 0003, ditegaskan kembali 19 Oktober 2026 di
+  ADR 0005 setelah desain menampilkan "Realm Admin — DELEGATED"). `user_roles` adalah satu-satunya
+  sumber peran otorisasi; `OrgMember.role` bukan peran otorisasi. Tidak ada migrasi yang diperlukan.
+- **Desain Stitch diadopsi sebagai arah produk** (ADR 0006). Dua non-goal dicabut: UMS kini boleh
+  menjadi service provider terhadap IdP eksternal, dan boleh melayani konsumen di luar platform.
 
 ## Kriteria keberhasilan
 

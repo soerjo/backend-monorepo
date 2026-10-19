@@ -145,5 +145,9 @@ Perubahan pada tabel yang **sudah ada**:
   pengelompokan wildcard `iam:users:*`. Nama permission sekarang bebas. Lihat
   `docs/02-patterns.md`.
 - `OrgMember.role` — desain menampilkan "Realm Admin — DELEGATED", yaitu role yang dibatasi per
-  organisasi. Ini **bertentangan dengan ADR 0003** yang memutuskan role bersifat global.
-  Konflik tercatat di ADR 0005 dan belum diselesaikan.
+  organisasi. Konflik dengan ADR 0003 **sudah diselesaikan** (ADR 0005, 19 Oktober 2026):
+  **role tetap global**, `user_roles` **tidak** ditambah `orgId`, dan klaim token tidak berubah.
+  "Realm Admin" menjadi role global `ums:realm-admin`, dan pembatasan per-organisasi ditegakkan di
+  **lapisan query** — setiap endpoint yang bisa diakses role itu wajib memfilter berdasarkan
+  keanggotaan `OrgMember` pemanggil. Risikonya berpindah ke query, jadi pembatasan ini **wajib punya
+  test per endpoint**, bukan sekadar konvensi.

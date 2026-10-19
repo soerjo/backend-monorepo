@@ -9,7 +9,7 @@ import {
   MfaChallengeDto,
 } from './dto/mfa.dto.js';
 
-@Controller('api/mfa')
+@Controller('mfa')
 export class MfaController {
   constructor(private readonly mfaService: MfaService) {}
 

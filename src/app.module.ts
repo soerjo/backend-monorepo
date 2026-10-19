@@ -12,6 +12,7 @@ import { PermissionsModule } from './modules/permissions/permissions.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { MetricsModule } from './modules/metrics/metrics.module.js';
+import { MfaModule } from './modules/mfa/mfa.module.js';
 import { SessionsModule } from './modules/sessions/sessions.module.js';
 import { ClientsModule } from './modules/clients/clients.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
@@ -41,6 +42,7 @@ import { validate } from './config/env.validation.js';
     PermissionsModule,
     SessionsModule,
     AuditModule,
+    MfaModule,
     HealthModule,
     MetricsModule,
     ClientsModule,

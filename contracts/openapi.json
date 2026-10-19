@@ -1180,6 +1180,92 @@
         ]
       }
     },
+    "/mfa/enroll": {
+      "post": {
+        "operationId": "MfaController_enroll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Mfa"
+        ]
+      }
+    },
+    "/mfa/confirm": {
+      "post": {
+        "operationId": "MfaController_confirm",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaConfirmDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Mfa"
+        ]
+      }
+    },
+    "/mfa/disable": {
+      "post": {
+        "operationId": "MfaController_disable",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaDisableDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Mfa"
+        ]
+      }
+    },
+    "/mfa/challenge": {
+      "post": {
+        "operationId": "MfaController_challenge",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaChallengeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Mfa"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "HealthController_check",
@@ -1987,6 +2073,18 @@
             "example": "Can view user list and profiles"
           }
         }
+      },
+      "MfaConfirmDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "MfaDisableDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "MfaChallengeDto": {
+        "type": "object",
+        "properties": {}
       },
       "CreateApiClientDto": {
         "type": "object",

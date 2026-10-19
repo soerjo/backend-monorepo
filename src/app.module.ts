@@ -11,6 +11,7 @@ import { RolesModule } from './modules/roles/roles.module.js';
 import { PermissionsModule } from './modules/permissions/permissions.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { MetricsModule } from './modules/metrics/metrics.module.js';
+import { SessionsModule } from './modules/sessions/sessions.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { loggerConfig } from './config/logger.config.js';
@@ -36,6 +37,7 @@ import { validate } from './config/env.validation.js';
     OrganizationsModule,
     RolesModule,
     PermissionsModule,
+    SessionsModule,
     HealthModule,
     MetricsModule,
   ],

@@ -412,6 +412,114 @@
         ]
       }
     },
+    "/users/{id}/sessions": {
+      "get": {
+        "operationId": "UsersController_listSessions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List the user’s active sessions (admin; no current flag)",
+        "tags": [
+          "Users"
+        ]
+      },
+      "delete": {
+        "operationId": "UsersController_revokeAllSessions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Revoke ALL of the user’s sessions (admin); returns revoked count",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/auth/sessions": {
+      "get": {
+        "operationId": "SessionsController_listOwn",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Active sessions of the caller, newest first; exactly one current:true (with the refresh cookie present)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "ums_refresh_token": []
+          }
+        ],
+        "summary": "List the caller’s active sessions (revoked/expired excluded, newest first)",
+        "tags": [
+          "Sessions"
+        ]
+      }
+    },
+    "/auth/sessions/{id}": {
+      "delete": {
+        "operationId": "SessionsController_revokeOwn",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "unused"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Revoke one owned session and its whole family (404 shared message for not-exists/not-owned)",
+        "tags": [
+          "Sessions"
+        ]
+      }
+    },
     "/orgs": {
       "get": {
         "operationId": "OrganizationsController_findAll",

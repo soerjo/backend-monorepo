@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Session manager (epic 002)** — four additive endpoints around session visibility
+  and revocation. Session responses are whitelist-mapped: only `id`, `current`,
+  `client {browser, os, deviceType}`, `ip`, `createdAt`, `expiresAt` are exposed.
+  Chain fields (`refreshHash`, `replacedByHash`, `family`) are structurally excluded.
+  The client object is parsed server-side from the stored userAgent string
+  (dependency-free parser); unrecognizable or missing UA yields `"unknown"`
+  fields, never an error. Revocation is at FAMILY level (token-claim rules
+  unchanged); revoked/expired sessions never appear in listings.
+  - `GET /auth/sessions` — active sessions of the caller, newest first, with a
+    `current:true` flag resolved from the refresh cookie (when absent, no entry
+    is flagged current).
+  - `DELETE /auth/sessions/:id` — revoke the caller's own session and its whole
+    family; `404` with a single shared message for both "does not exist" and
+    "not owned by caller" (ownership probing impossible).
+  - `GET /users/:id/sessions` — admin (`ums:admin`) view of any user's active
+    sessions, same object shape without the `current` flag.
+  - `DELETE /users/:id/sessions` — admin revokes ALL of the user's active
+    sessions; `404` when the user does not exist, `200 {revoked: n}` otherwise.
+- Decision note: `Session.lastUsedAt` was considered and deliberately NOT added
+  in this slice — no claim-token change, no new write path.
 - Initial release of the OpenAPI contract (auto-generated).
 - **Mail module (slice 5, ADR 0004)**: `ums-service` now sends password-reset and
   email-verification messages directly (Nodemailer + SMTP Hostinger). Transport

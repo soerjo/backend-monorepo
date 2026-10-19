@@ -35,7 +35,17 @@ describeE2e('Auth flow (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    // Match the production pipeline (main.ts): without the interceptor/filter
+    // the responses are bare and every envelope assertion here is meaningless.
     app.setGlobalPrefix('api');
+    const { ResponseTransformInterceptor } = await import(
+      './../src/common/interceptors/response-transform.interceptor.js'
+    );
+    const { AllExceptionsFilter } = await import(
+      './../src/common/filters/all-exceptions.filter.js'
+    );
+    app.useGlobalInterceptors(new ResponseTransformInterceptor());
+    app.useGlobalFilters(new AllExceptionsFilter());
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -63,7 +73,7 @@ describeE2e('Auth flow (e2e)', () => {
       .send({ email, password })
       .expect(200);
 
-    const loginBody = login.body as TokenResponse;
+    const loginBody = (login.body as { data: TokenResponse }).data;
     expect(loginBody.accessToken).toBeDefined();
     expect(loginBody.refreshToken).toBeDefined();
     expect(loginBody.user.email).toBe(email);
@@ -73,7 +83,7 @@ describeE2e('Auth flow (e2e)', () => {
       .send({ refreshToken: loginBody.refreshToken })
       .expect(200);
 
-    const refreshBody = refresh.body as TokenResponse;
+    const refreshBody = (refresh.body as { data: TokenResponse }).data;
     expect(refreshBody.refreshToken).toBeDefined();
     expect(refreshBody.refreshToken).not.toBe(loginBody.refreshToken);
 
@@ -124,7 +134,17 @@ describeE2e('Epic 001 — password recovery (e2e)', () => {
       ],
     }).compile();
     localApp = moduleFixture.createNestApplication();
+    // Same production pipeline as the primary bootstrap - without these the
+    // journeys read bare bodies and every envelope assertion fails.
     localApp.setGlobalPrefix('api');
+    const { ResponseTransformInterceptor: RTI } = await import(
+      './../src/common/interceptors/response-transform.interceptor.js'
+    );
+    const { AllExceptionsFilter: AEF } = await import(
+      './../src/common/filters/all-exceptions.filter.js'
+    );
+    localApp.useGlobalInterceptors(new RTI());
+    localApp.useGlobalFilters(new AEF());
     localApp.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -134,6 +154,14 @@ describeE2e('Epic 001 — password recovery (e2e)', () => {
     );
     await localApp.init();
     server = localApp.getHttpServer();
+
+    // The recovery journeys assume an existing account for recoveryEmail —
+    // without this registration the forgot-password call is a silent no-op
+    // (anti-enumeration) and every later login returns 401.
+    await request(server)
+      .post('/api/auth/register')
+      .send({ email: recoveryEmail, password: oldPassword, name: 'Recovery E2E' })
+      .expect(201);
   });
 
   const post = async (path: string, body: Record<string, unknown>) =>
@@ -215,7 +243,7 @@ describeE2e('Epic 001 — password recovery (e2e)', () => {
       password: oldPassword,
     });
     expect(preReset.status).toBe(200);
-    const preResetBody = preReset.body as TokenResponse;
+    const preResetBody = (preReset.body as { data: TokenResponse }).data;
     const oldRefreshToken = preResetBody.refreshToken;
     expect(oldRefreshToken).toBeDefined();
 
@@ -292,7 +320,17 @@ describeE2e('Epic 001 — email verification (e2e)', () => {
       ],
     }).compile();
     localApp = moduleFixture.createNestApplication();
+    // Same production pipeline as the primary bootstrap - without these the
+    // journeys read bare bodies and every envelope assertion fails.
     localApp.setGlobalPrefix('api');
+    const { ResponseTransformInterceptor: RTI } = await import(
+      './../src/common/interceptors/response-transform.interceptor.js'
+    );
+    const { AllExceptionsFilter: AEF } = await import(
+      './../src/common/filters/all-exceptions.filter.js'
+    );
+    localApp.useGlobalInterceptors(new RTI());
+    localApp.useGlobalFilters(new AEF());
     localApp.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,

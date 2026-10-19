@@ -6,6 +6,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { AuthTokensRepository } from './auth-tokens.repository.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { WebhookDispatcherService } from '../clients/webhook-dispatcher.service.js';
 import { loadJwtRsaKeypair } from '../../common/utils/jwt-keypair.util.js';
 import { computeKeyId } from '../../common/utils/jwk.util.js';
 import { JWT_AZP, JWT_ISSUER } from './auth.constants.js';
@@ -66,6 +67,9 @@ describe('RS256 access token signing (UMS contract)', () => {
       {
         log: jest.fn().mockResolvedValue(undefined),
       } as unknown as AuditService,
+      {
+        dispatch: jest.fn().mockResolvedValue([]),
+      } as unknown as WebhookDispatcherService,
     );
   });
 

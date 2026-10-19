@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { ClientsModule } from '../clients/clients.module.js'; 97b65b3 (feat(webhooks): dispatch auth and mfa lifecycle events via WebhookDispatcherService)
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -21,11 +22,11 @@ import type { JwtModuleOptions } from '@nestjs/jwt';
 
 @Module({
   imports: [
-    PassportModule,
+    forwardRef(() => ClientsModule),
     UsersModule,
     MailModule,
     AuditModule,
-    forwardRef(() => MfaModule),
+    forwardRef(() => MfaModule), 97b65b3 (feat(webhooks): dispatch auth and mfa lifecycle events via WebhookDispatcherService)
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

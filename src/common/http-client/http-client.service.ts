@@ -20,8 +20,7 @@ export class InterServiceHttpClient {
       retries: 2,
       retryCondition: (error) => {
         return (
-          axiosRetry.isNetworkError(error) ||
-          axiosRetry.isRetryableError(error)
+          axiosRetry.isNetworkError(error) || axiosRetry.isRetryableError(error)
         );
       },
       onRetry: (retryCount, error, requestConfig) => {

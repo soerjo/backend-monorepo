@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { OutboxStatus, Prisma } from '@prisma/client';
@@ -70,14 +75,14 @@ export class OutboxRelayService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     if (this.kafkaEnabled) {
-      const brokers = (
-        this.configService.get<string>('KAFKA_BROKERS') ?? ''
-      )
+      const brokers = (this.configService.get<string>('KAFKA_BROKERS') ?? '')
         .split(',')
         .map((b) => b.trim())
         .filter(Boolean);
 
-      this.logger.log(`Initializing Kafka producer for brokers: ${brokers.join(', ')}`);
+      this.logger.log(
+        `Initializing Kafka producer for brokers: ${brokers.join(', ')}`,
+      );
       this.kafka = new Kafka({
         clientId: 'pos-service-outbox',
         brokers,

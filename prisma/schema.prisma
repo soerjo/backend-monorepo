@@ -226,3 +226,18 @@ model WebhookDelivery {
   @@index([endpointId, createdAt])
   @@map("webhook_deliveries")
 }
+
+/// OIDC identity provider configuration (ADR 0006 — federation, v1).
+model IdentityProvider {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  issuer          String
+  clientId        String
+  clientSecretEnc String
+  scopes          String[] @default(["openid", "email", "profile"])
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("identity_providers")
+}

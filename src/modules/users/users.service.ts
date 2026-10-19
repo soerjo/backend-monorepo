@@ -4,6 +4,7 @@ import { AssignRolesDto } from './dto/assign-roles.dto.js';
 import { ListUsersDto } from './dto/list-users.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { verifyPassword } from '../../common/utils/password.util.js';
 import { $Enums } from '@prisma/client';
 
 @Injectable()
@@ -69,5 +70,19 @@ export class UsersService {
         role: member.role,
       })),
     };
+  }
+
+  async validatePassword(
+    userId: string,
+    plainPassword: string,
+  ): Promise<boolean> {
+    const user = await this.usersRepository.findById(userId);
+    if (!user) return false;
+    return verifyPassword(user.passwordHash, plainPassword);
+  }
+
+  async getEmail(userId: string): Promise<string> {
+    const user = await this.usersRepository.findById(userId);
+    return user.email;
   }
 }

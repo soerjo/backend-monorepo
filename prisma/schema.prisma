@@ -31,6 +31,7 @@ model User {
   userRoles  UserRole[]
   orgMembers OrgMember[]
   authTokens AuthToken[]
+  mfaFactors MfaFactor[]
 
   @@map("users")
 }
@@ -145,19 +146,34 @@ model AuthToken {
 
 /// Audit log of security-relevant actions (ADR 0007: 30-day retention).
 model AuditLog {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   actorId     String?
-  actorType   String    @default("user")
+  actorType   String   @default("user")
   action      String
-  severity    String    @default("info")
+  severity    String   @default("info")
   subjectType String?
   subjectId   String?
   ip          String?
   userAgent   String?
   metadata    Json?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime @default(now())
 
   @@index([createdAt])
   @@index([action])
   @@map("audit_logs")
+}
+
+model MfaFactor {
+  id            String    @id @default(uuid())
+  userId        String
+  type          String    @default("totp")
+  secret        String
+  enabled       Boolean   @default(false)
+  confirmedAt   DateTime?
+  recoveryCodes String[]  @default([])
+  createdAt     DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("mfa_factors")
 }

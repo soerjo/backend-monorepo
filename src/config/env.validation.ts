@@ -107,6 +107,10 @@ class EnvironmentVariables {
   // Mail (ADR 0004): 'log' = dev (no network), 'smtp' = real delivery.
   @IsString()
   @IsOptional()
+  APP_ENCRYPTION_KEY?: string;
+
+  @IsString()
+  @IsOptional()
   MAIL_TRANSPORT: string = 'log';
 
   @IsString()

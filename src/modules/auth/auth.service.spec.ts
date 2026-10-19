@@ -6,8 +6,6 @@ import type { User } from '@prisma/client';
 import { UsersRepository } from '../users/users.repository.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AuthService } from './auth.service.js';
-import { MfaService } from '../mfa/mfa.service.js';
-import type { IssuedTokens } from './auth.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AuthTokensRepository } from './auth-tokens.repository.js';
 import { hashPassword } from '../../common/utils/password.util.js';
@@ -147,9 +145,6 @@ describe('AuthService', () => {
 
     updateManySession = prisma.session.updateMany;
     updateSession = prisma.session.update;
-    const mfaService = {
-      isEnabled: jest.fn().mockResolvedValue(false),
-    } as unknown as MfaService;
     service = new AuthService(
       { findById, findByEmail } as unknown as UsersRepository,
       jwtService as unknown as JwtService,
@@ -169,7 +164,7 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('stores only the sha256 hash of the refresh token', async () => {
-      const result = (await service.login(authUser)) as unknown as IssuedTokens;
+      const result = await service.login(authUser);
 
       expect(result.accessToken).toBe('signed-access-token');
       expect(result.user).toEqual(authUser);
@@ -182,7 +177,7 @@ describe('AuthService', () => {
   describe('refresh rotation', () => {
     it('rotates the token and marks the old session as replaced', async () => {
       findById.mockResolvedValue(fullUser);
-      const login = (await service.login(authUser)) as unknown as IssuedTokens;
+      const login = await service.login(authUser);
 
       const rotated = await service.refresh(login.refreshToken);
 
@@ -198,7 +193,7 @@ describe('AuthService', () => {
 
     it('keeps the rotated session in the same family', async () => {
       findById.mockResolvedValue(fullUser);
-      const login = (await service.login(authUser)) as unknown as IssuedTokens;
+      const login = await service.login(authUser);
 
       await service.refresh(login.refreshToken);
 
@@ -208,7 +203,7 @@ describe('AuthService', () => {
 
     it('detects reuse of a rotated token and revokes the whole family', async () => {
       findById.mockResolvedValue(fullUser);
-      const login = (await service.login(authUser)) as unknown as IssuedTokens;
+      const login = await service.login(authUser);
       await service.refresh(login.refreshToken);
 
       await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(
@@ -229,7 +224,7 @@ describe('AuthService', () => {
     });
 
     it('rejects an expired session and revokes it', async () => {
-      const login = (await service.login(authUser)) as unknown as IssuedTokens;
+      const login = await service.login(authUser);
       const session = sessions[0];
       session.expiresAt = new Date(Date.now() - 1000);
 
@@ -241,7 +236,7 @@ describe('AuthService', () => {
 
     it('revokes the family when the user is no longer active', async () => {
       findById.mockResolvedValue({ ...fullUser, status: UserStatus.BLOCKED });
-      const login = (await service.login(authUser)) as unknown as IssuedTokens;
+      const login = await service.login(authUser);
 
       await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(
         UnauthorizedException,
@@ -251,7 +246,7 @@ describe('AuthService', () => {
 
     it('rejects when the user no longer exists', async () => {
       findById.mockResolvedValue(null);
-      const login = (await service.login(authUser)) as unknown as IssuedTokens;
+      const login = await service.login(authUser);
 
       await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(
         UnauthorizedException,
@@ -261,7 +256,7 @@ describe('AuthService', () => {
 
   describe('logout', () => {
     it('revokes the session matching the refresh token', async () => {
-      const login = (await service.login(authUser)) as unknown as IssuedTokens;
+      const login = await service.login(authUser);
 
       await service.logout(login.refreshToken);
 

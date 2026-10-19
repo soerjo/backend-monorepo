@@ -1,5 +1,6 @@
 import { generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
+import { MfaService } from '../mfa/mfa.service.js';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service.js';
 import { AuditService } from '../audit/audit.service.js';
@@ -66,6 +67,9 @@ describe('RS256 access token signing (UMS contract)', () => {
       {
         log: jest.fn().mockResolvedValue(undefined),
       } as unknown as AuditService,
+      {
+        isEnabled: jest.fn().mockResolvedValue(false),
+      } as unknown as MfaService,
     );
   });
 

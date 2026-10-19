@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesService } from './roles.service.js';
 import { RolesRepository } from './roles.repository.js';
+import { AuditService } from '../audit/audit.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ForbiddenException, ConflictException } from '@nestjs/common';
 import { UMS_ADMIN_ROLE } from '../auth/auth.constants.js';
@@ -38,6 +39,7 @@ describe('RolesService', () => {
       providers: [
         RolesService,
         RolesRepository,
+        { provide: AuditService, useValue: { log: jest.fn() } },
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();

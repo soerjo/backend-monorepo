@@ -9,6 +9,7 @@ import { UsersModule } from './modules/users/users.module.js';
 import { OrganizationsModule } from './modules/organizations/organizations.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { PermissionsModule } from './modules/permissions/permissions.module.js';
+import { AuditModule } from './modules/audit/audit.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { MetricsModule } from './modules/metrics/metrics.module.js';
 import { SessionsModule } from './modules/sessions/sessions.module.js';
@@ -38,6 +39,7 @@ import { validate } from './config/env.validation.js';
     RolesModule,
     PermissionsModule,
     SessionsModule,
+    AuditModule,
     HealthModule,
     MetricsModule,
   ],

@@ -2,6 +2,7 @@ import { generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service.js';
+import { AuditService } from '../audit/audit.service.js';
 import { AuthTokensRepository } from './auth-tokens.repository.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -62,6 +63,9 @@ describe('RS256 access token signing (UMS contract)', () => {
       {} as unknown as PrismaService,
       {} as unknown as AuthTokensRepository,
       { sendPasswordReset: jest.fn(), sendEmailVerification: jest.fn() },
+      {
+        log: jest.fn().mockResolvedValue(undefined),
+      } as unknown as AuditService,
     );
   });
 

@@ -142,3 +142,22 @@ model AuthToken {
   @@index([userId, type])
   @@map("auth_tokens")
 }
+
+/// Audit log of security-relevant actions (ADR 0007: 30-day retention).
+model AuditLog {
+  id          String    @id @default(uuid())
+  actorId     String?
+  actorType   String    @default("user")
+  action      String
+  severity    String    @default("info")
+  subjectType String?
+  subjectId   String?
+  ip          String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}

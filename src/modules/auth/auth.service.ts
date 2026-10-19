@@ -25,6 +25,7 @@ import type { MailSender } from '../mail/mail.types.js';
 import { Inject } from '@nestjs/common';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import type { RegisterDto } from './dto/register.dto.js';
+import { AuditService } from '../audit/audit.service.js';
 
 export interface RequestMeta {
   userAgent?: string | null;
@@ -55,6 +56,7 @@ export class AuthService {
     private prisma: PrismaService,
     private authTokensRepository: AuthTokensRepository,
     @Inject('MailSender') private mailSender: MailSender,
+    private auditService: AuditService,
   ) {}
 
   private get accessTokenTtlSeconds(): number {
@@ -240,6 +242,13 @@ export class AuthService {
       meta,
     );
 
+    await this.auditService.log({
+      action: 'auth.login.success',
+      actorId: user.id,
+      ip: meta.ip ?? undefined,
+      userAgent: meta.userAgent ?? undefined,
+    });
+
     return {
       accessToken: this.buildAccessToken(user),
       refreshToken,
@@ -264,6 +273,16 @@ export class AuthService {
     // token was stolen — burn every session in the family.
     if (session.revokedAt || session.replacedByHash) {
       await this.revokeFamily(session.family);
+      await this.auditService.log({
+        action: 'session.revoked',
+        actorId: session.userId,
+        severity: 'warn',
+        subjectType: 'session',
+        subjectId: session.id,
+        ip: meta.ip ?? undefined,
+        userAgent: meta.userAgent ?? undefined,
+        metadata: { reason: 'refresh-token-reuse', family: session.family },
+      });
       throw new UnauthorizedException('Refresh token reuse detected');
     }
 
@@ -294,6 +313,13 @@ export class AuthService {
       },
     });
 
+    await this.auditService.log({
+      action: 'auth.refresh',
+      actorId: authUser.id,
+      ip: meta.ip ?? undefined,
+      userAgent: meta.userAgent ?? undefined,
+    });
+
     return {
       accessToken: this.buildAccessToken(authUser),
       refreshToken: rotated.refreshToken,
@@ -312,13 +338,24 @@ export class AuthService {
         where: { id: session.id },
         data: { revokedAt: new Date() },
       });
+      await this.auditService.log({
+        action: 'auth.logout',
+        actorId: session.userId,
+        subjectType: 'session',
+        subjectId: session.id,
+      });
     }
   }
 
   async logoutAll(userId: string): Promise<void> {
-    await this.prisma.session.updateMany({
+    const result = await this.prisma.session.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
+    });
+    await this.auditService.log({
+      action: 'session.revoked',
+      actorId: userId,
+      metadata: { reason: 'logout-all', count: result.count },
     });
   }
 
@@ -429,6 +466,12 @@ export class AuthService {
       newPasswordHash,
       userId: authToken.userId,
     });
+
+    await this.auditService.log({
+      action: 'auth.password_reset_completed',
+      actorId: authToken.userId,
+      severity: 'warn',
+    });
   }
 
   /**
@@ -448,6 +491,11 @@ export class AuthService {
     await this.authTokensRepository.consumeEmailVerifyToken({
       tokenId: authToken.id,
       userId: authToken.userId,
+    });
+
+    await this.auditService.log({
+      action: 'auth.email_verified',
+      actorId: authToken.userId,
     });
   }
 

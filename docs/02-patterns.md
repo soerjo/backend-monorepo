@@ -57,10 +57,34 @@ membuat kontrak OpenAPI bisa digenerate tanpa kebocoran detail implementasi.
 - Label route memakai template (`/api/users/:id`), bukan URL mentah, supaya kardinalitas label
   Prometheus tidak meledak oleh UUID.
 
+## Konvensi penamaan permission (usulan dari desain)
+
+Desain Stitch memakai pola yang jauh lebih disiplin daripada nama bebas yang berlaku sekarang:
+
+```
+<domain>:<aksi>[.<kualifikasi>]      users:read.profile · users:write.provision
+                                     users:impersonate.ephemeral · crypto:keys.rotate
+                                     oauth:clients.create · audit:logs.stream
+```
+
+Dikelompokkan dengan wildcard untuk tampilan dan pemberian massal: `iam:users:*`,
+`iam:realms:*`, `iam:telemetry:*`, `iam:clients:*`, `iam:billing:*`.
+
+Catatan penting: wildcard di desain adalah **pengelompokan untuk UI**, bukan izin yang tersimpan.
+Menyimpan `iam:users:*` sebagai baris `Permission` berarti pengecekan izin harus melakukan
+pencocokan pola saat runtime — lebih lambat dan lebih mudah salah. Simpan permission konkret;
+biarkan wildcard hidup di lapisan presentasi saja.
+
+`[NEEDS INPUT]` Konvensi ini belum diadopsi. Mengadopsinya berarti mengganti nama permission yang
+sudah ada, jadi butuh keputusan dan migrasi data.
+
 ## Anti-pattern (jangan diulang)
 
 - Query DB di jalur verifikasi token.
 - Prisma dipanggil langsung dari service atau controller, melewati repository.
 - Membuat konfigurasi `DocumentBuilder` kedua yang berbeda dari `main.ts` — kontrak jadi bercabang.
 - Menambahkan env public key RS256; public key diturunkan, bukan dikonfigurasi.
+- Menyimpan permission wildcard (`iam:users:*`) sebagai baris `Permission` — pencocokan pola saat
+  runtime adalah sumber bug otorisasi.
+- Mengisi kolom yang datanya tidak kita punya (geolocation, risk score) dengan nilai tebakan.
 - Menyimpan refresh token apa adanya, atau mencabut satu baris sesi saat mendeteksi pemakaian ulang.

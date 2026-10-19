@@ -108,3 +108,46 @@ erDiagram
 - **`orgs[]` di klaim token berisi nama organisasi**, bukan id. Mengganti nama organisasi karena itu
   bersifat breaking bagi consumer.
 - **Tidak ada soft delete.** Penghapusan bersifat permanen dan cascade.
+
+## Celah skema terhadap desain
+
+Dipetakan dari desain Stitch "Enterprise UMS Dashboard" (19 Oktober 2026). Ini **bukan rencana
+migrasi** — ini catatan jarak, supaya tidak ada yang mengira layar desain bisa dibuat tanpa menyentuh
+database.
+
+Tabel yang perlu ada jika desain dikejar seluruhnya:
+
+- **MFA** — faktor terdaftar per user, enrolment WebAuthn/passkey (credential id, public key,
+  counter), recovery code. Minimal 2–3 tabel; ini bounded context baru, bukan kolom tambahan.
+- **Audit log** — peristiwa, severity, actor dan subject, origin IP, geo, client agent, status.
+  Volume tinggi; kebijakan retensi menentukan apakah cukup Postgres atau perlu sink terpisah
+  (Loki sudah tersedia di platform).
+- **OAuth client** — client id, secret ter-hash, scope, rate limit, CIDR allowlist, last used.
+- **Webhook endpoint + delivery log** — URL, secret penandatangan, status pengiriman, latensi,
+  percobaan ulang.
+- **Security policy** — konfigurasi faktor yang diizinkan, TTL token, batas sesi bersamaan, aturan
+  risiko. Sebagian bisa jadi konfigurasi, bukan tabel.
+- **Federation / IdP** — konfigurasi SAML/OIDC per organisasi: ACS URL, entity id, sidik jari
+  sertifikat, pemetaan klaim→role.
+- **Billing** — langganan, invoice, alokasi kursi.
+
+Perubahan pada tabel yang **sudah ada**:
+
+- `Session` — desain menampilkan "Last Active", sedangkan tabel ini tidak punya `lastUsedAt`.
+  Rotasi refresh token membuat baris baru, jadi aktivitas terakhir hanya bisa didekati dari
+  `createdAt` sesi terbaru dalam satu `family`. Penambahan `lastUsedAt` diputuskan di epic 002
+  slice 1.
+- `Session` — kolom Geolocation dan Risk Score di desain **tidak punya sumber data**. Geo butuh
+  lookup Geo-IP; risk score butuh device fingerprint dan riwayat geo-velocity. Keduanya di luar
+  cakupan epic 002, dan **tidak boleh diisi tebakan** — admin mengambil keputusan pencabutan
+  berdasarkan kolom itu.
+- `Permission` — desain memakai penamaan berpola `users:read.profile`, `crypto:keys.rotate`, dengan
+  pengelompokan wildcard `iam:users:*`. Nama permission sekarang bebas. Lihat
+  `docs/02-patterns.md`.
+- `OrgMember.role` — desain menampilkan "Realm Admin — DELEGATED", yaitu role yang dibatasi per
+  organisasi. Konflik dengan ADR 0003 **sudah diselesaikan** (ADR 0005, 19 Oktober 2026):
+  **role tetap global**, `user_roles` **tidak** ditambah `orgId`, dan klaim token tidak berubah.
+  "Realm Admin" menjadi role global `ums:realm-admin`, dan pembatasan per-organisasi ditegakkan di
+  **lapisan query** — setiap endpoint yang bisa diakses role itu wajib memfilter berdasarkan
+  keanggotaan `OrgMember` pemanggil. Risikonya berpindah ke query, jadi pembatasan ini **wajib punya
+  test per endpoint**, bukan sekadar konvensi.

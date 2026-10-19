@@ -21,24 +21,27 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       algorithms: ['RS256'],
-      secretOrKeyProvider: async (
+      secretOrKeyProvider: (
         _request: unknown,
         _rawJwtToken: unknown,
         done: (err: unknown, secretOrKey: string | Buffer | undefined) => void,
       ) => {
-        try {
-          // We resolve the available UMS verification keys (JWKS first, static fallback).
-          // Passport-jwt cannot easily handle multi-key lookup without the kid; we use
-          // the first key resolved (matches single-key deployments) or static fallback.
-          const keys = await umsJwksService.getVerificationKeys();
-          const keyList = Object.values(keys);
-          if (keyList.length === 0) {
-            return done(new Error('No UMS verification keys available'), undefined);
-          }
-          return done(null, keyList[0]);
-        } catch (err) {
-          return done(err, undefined);
-        }
+        // We resolve the available UMS verification keys (JWKS first, static fallback).
+        // Passport-jwt cannot easily handle multi-key lookup without the kid; we use
+        // the first key resolved (matches single-key deployments) or static fallback.
+        umsJwksService
+          .getVerificationKeys()
+          .then((keys) => {
+            const keyList = Object.values(keys);
+            if (keyList.length === 0) {
+              done(new Error('No UMS verification keys available'), undefined);
+              return;
+            }
+            done(null, keyList[0]);
+          })
+          .catch((err: unknown) => {
+            done(err, undefined);
+          });
       },
     });
   }

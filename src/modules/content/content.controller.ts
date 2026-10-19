@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Post,
-  Put,
   Patch,
   Delete,
   Body,
@@ -20,10 +19,7 @@ import {
 import { ContentService } from './content.service.js';
 import { CreateContentEntryDto } from './dto/create-content-entry.dto.js';
 import { PublishScheduleDto } from './dto/publish-schedule.dto.js';
-import {
-  UpdateContentEntryDto,
-  UpdateContentTagsDto,
-} from './dto/update-content-entry.dto.js';
+import { UpdateContentEntryDto } from './dto/update-content-entry.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';

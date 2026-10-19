@@ -34,11 +34,13 @@ describe('ContentService (Delete & Remove)', () => {
     contentRepo.delete.mockResolvedValue({ id: 'entry-1' } as any);
     const result = await service.remove('entry-1');
     expect(result).toEqual({ id: 'entry-1' });
-    expect(contentRepo.delete).toHaveBeenCalledWith('entry-1');
+    expect(contentRepo.delete.mock.calls[0]?.[0]).toBe('entry-1');
   });
 
   it('should throw NotFoundException when removing non-existent entry', async () => {
     contentRepo.delete.mockRejectedValue(new NotFoundException('Not found'));
-    await expect(service.remove('invalid-id')).rejects.toThrow(NotFoundException);
+    await expect(service.remove('invalid-id')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });

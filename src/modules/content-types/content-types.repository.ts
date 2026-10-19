@@ -79,8 +79,13 @@ export class ContentTypesRepository {
       return await this.prisma.contentType.delete({
         where: { id },
       });
-    } catch (error: any) {
-      if (error?.code === 'P2003') {
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: unknown }).code === 'P2003'
+      ) {
         throw new ConflictException(
           'masih ada entries yang memakai content type ini',
         );

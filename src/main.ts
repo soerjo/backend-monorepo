@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
+import { buildSwaggerConfig } from './swagger.config.js';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import {
@@ -46,13 +47,7 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new ResponseTransformInterceptor());
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('API')
-    .setDescription('API documentation')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  const document = SwaggerModule.createDocument(app, buildSwaggerConfig());
   SwaggerModule.setup('docs', app, document);
 
   const corsOrigins = parseCorsOrigins(

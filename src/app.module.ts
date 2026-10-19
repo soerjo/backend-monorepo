@@ -15,7 +15,6 @@ import { MetricsModule } from './modules/metrics/metrics.module.js';
 import { MfaModule } from './modules/mfa/mfa.module.js';
 import { SessionsModule } from './modules/sessions/sessions.module.js';
 import { ClientsModule } from './modules/clients/clients.module.js';
-import { FederationModule } from './modules/federation/federation.module.js';
 import { SecurityPoliciesModule } from './modules/security-policies/security-policies.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
@@ -48,7 +47,6 @@ import { validate } from './config/env.validation.js';
     HealthModule,
     MetricsModule,
     ClientsModule,
-    FederationModule,
     SecurityPoliciesModule,
   ],
   providers: [

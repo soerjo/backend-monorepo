@@ -27,13 +27,14 @@ export class NodemailerMailService implements MailSender {
   private readonly transporter: Transporter | null;
 
   constructor(configService: ConfigService) {
-    const rawMode = (
-      configService.get<string>('MAIL_TRANSPORT') ?? 'log'
-    ).trim();
-    this.mode = rawMode === 'smtp' ? 'smtp' : 'log';
-    if (rawMode !== 'log' && rawMode !== 'smtp') {
+    const smtpHost = configService.get<string>('SMTP_HOST');
+    const explicit = (configService.get<string>('MAIL_TRANSPORT') ?? '').trim();
+    // Env-driven: SMTP is enabled when SMTP_HOST is present (unless explicitly
+    // forced to 'log'); absent SMTP_* env => email is disabled (log mode).
+    this.mode = explicit === 'log' ? 'log' : smtpHost ? 'smtp' : 'log';
+    if (smtpHost && explicit === 'log') {
       this.logger.warn(
-        `MAIL_TRANSPORT value '${rawMode}' is unknown — falling back to 'log'`,
+        'SMTP_HOST set but MAIL_TRANSPORT=log overrides — email disabled',
       );
     }
     this.from =

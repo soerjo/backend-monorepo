@@ -176,6 +176,7 @@ model MfaFactor {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("mfa_factors")
+}
 
 enum WebhookDeliveryStatus {
   SUCCESS

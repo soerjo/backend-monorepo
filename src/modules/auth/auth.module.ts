@@ -12,6 +12,7 @@ import { UsersModule } from '../users/users.module.js';
 import { parseDurationToSeconds } from '../../common/utils/token-expiry.util.js';
 import { loadJwtRsaKeypair } from '../../common/utils/jwt-keypair.util.js';
 import { computeKeyId } from '../../common/utils/jwk.util.js';
+import { AuthTokensRepository } from './auth-tokens.repository.js';
 import { JWT_ISSUER } from './auth.constants.js';
 import type { JwtModuleOptions } from '@nestjs/jwt';
 
@@ -43,7 +44,13 @@ import type { JwtModuleOptions } from '@nestjs/jwt';
     }),
   ],
   controllers: [AuthController, JwksController],
-  providers: [AuthService, JwtKeysService, LocalStrategy, JwtStrategy],
-  exports: [AuthService, JwtKeysService],
+  providers: [
+    AuthService,
+    AuthTokensRepository,
+    JwtKeysService,
+    LocalStrategy,
+    JwtStrategy,
+  ],
+  exports: [AuthService, AuthTokensRepository, JwtKeysService],
 })
 export class AuthModule {}

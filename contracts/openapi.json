@@ -150,6 +150,56 @@
         ]
       }
     },
+    "/auth/forgot-password": {
+      "post": {
+        "operationId": "AuthController_forgotPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Request a password reset token (always 200 — anti account enumeration)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/reset-password": {
+      "post": {
+        "operationId": "AuthController_resetPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Reset the password with a single-use token (revokes all sessions)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
     "/.well-known/jwks.json": {
       "get": {
         "operationId": "JwksController_jwks",
@@ -1111,6 +1161,38 @@
             "example": "pFq7...opaque-token"
           }
         }
+      },
+      "ForgotPasswordDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "user@example.com",
+            "format": "email"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "ResetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "example": "Xk9f2mQ7pLz3R1vY8wN4aB6cD0eF5gH2",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "example": "Str0ng-P@ssw0rd!",
+            "minLength": 8
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ]
       },
       "UpdateUserDto": {
         "type": "object",

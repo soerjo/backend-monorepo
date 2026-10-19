@@ -95,6 +95,10 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   UMS_ADMIN_NAME?: string;
+
+  @IsNumber()
+  @IsOptional()
+  AUTH_TOKEN_TTL_MINUTES: number = 60;
 }
 
 export function validate(config: Record<string, unknown>) {

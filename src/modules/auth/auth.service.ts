@@ -1,6 +1,6 @@
 import {
-  Injectable,
   BadRequestException,
+  Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -20,6 +20,7 @@ import {
   sha256Hex,
 } from '../../common/utils/hash.util.js';
 import { JWT_AZP } from './auth.constants.js';
+import { AuthTokensRepository } from './auth-tokens.repository.js';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import type { RegisterDto } from './dto/register.dto.js';
 
@@ -50,6 +51,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private prisma: PrismaService,
+    private authTokensRepository: AuthTokensRepository,
   ) {}
 
   private get accessTokenTtlSeconds(): number {
@@ -338,5 +340,77 @@ export class AuthService {
 
   get accessTokenExpiresInSeconds(): number {
     return this.accessTokenTtlSeconds;
+  }
+
+  /**
+   * TTL for PASSWORD_RESET tokens, sourced from AUTH_TOKEN_TTL_MINUTES
+   * (default 60 minutes — contract 001, never hardcoded).
+   */
+  private getPasswordResetTtlMinutes(): number {
+    const raw = this.configService.get<string | number>(
+      'AUTH_TOKEN_TTL_MINUTES',
+    );
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
+  }
+
+  /**
+   * Issues a single-use PASSWORD_RESET AuthToken when the email belongs to an
+   * active user. Anti-enumeration: the response and the amount of work are
+   * identical whether or not the email exists — the unknown-email branch pays
+   * a dummy argon2id hash to equalize timing. Delivery of the raw token to
+   * the user is slice 5's concern; here it is only logged (hash, never raw).
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await this.usersRepository
+      .findByEmail(email)
+      .catch(() => null);
+
+    if (!user || user.status !== $Enums.UserStatus.ACTIVE) {
+      // Burn equivalent CPU work so response timing does not reveal account existence.
+      await hashPassword('timing-equalizer-not-a-real-password');
+      return;
+    }
+
+    const rawToken = generateOpaqueToken();
+    const tokenHash = sha256Hex(rawToken);
+    const expiresAt = new Date(
+      Date.now() + this.getPasswordResetTtlMinutes() * 60_000,
+    );
+
+    await this.authTokensRepository.createPasswordResetToken(
+      user.id,
+      tokenHash,
+      expiresAt,
+    );
+
+    // Structured debug log carries the hash only — the raw token never lands in logs.
+    // Slice 5 replaces this with the mail module call.
+    this.prisma['logger']?.['debug']?.(
+      `PASSWORD_RESET token issued for user ${user.id} (hash ${tokenHash})`,
+    );
+  }
+
+  /**
+   * Consumes a PASSWORD_RESET token: replaces the password hash (argon2id),
+   * marks the token used, and revokes every active session of the user.
+   * Invalid, expired, and used tokens collapse into one identical error.
+   */
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const tokenHash = sha256Hex(token);
+    const authToken =
+      await this.authTokensRepository.findValidPasswordResetToken(tokenHash);
+
+    if (!authToken) {
+      throw new BadRequestException('Token is invalid or expired');
+    }
+
+    const newPasswordHash = await hashPassword(newPassword);
+
+    await this.authTokensRepository.consumePasswordResetToken({
+      tokenId: authToken.id,
+      newPasswordHash,
+      userId: authToken.userId,
+    });
   }
 }

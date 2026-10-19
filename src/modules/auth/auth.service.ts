@@ -21,7 +21,8 @@ import {
 } from '../../common/utils/hash.util.js';
 import { JWT_AZP } from './auth.constants.js';
 import { AuthTokensRepository } from './auth-tokens.repository.js';
-import * as mailTypes from '../mail/mail.types.js';
+import type { MailSender } from '../mail/mail.types.js';
+import { Inject } from '@nestjs/common';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import type { RegisterDto } from './dto/register.dto.js';
 
@@ -53,7 +54,7 @@ export class AuthService {
     private configService: ConfigService,
     private prisma: PrismaService,
     private authTokensRepository: AuthTokensRepository,
-    private mailSender: mailTypes.MailSender,
+    @Inject('MailSender') private mailSender: MailSender,
   ) {}
 
   private get accessTokenTtlSeconds(): number {

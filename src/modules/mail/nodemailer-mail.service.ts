@@ -2,11 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
-import type {
-  MailSendResult,
-  MailSender,
-  MailTransportMode,
-} from './mail.types.js';
+import { MailSendResult, MailSender, MailTransportMode } from './mail.types.js';
 
 const SMTP_SEND_TIMEOUT_MS = 10_000;
 

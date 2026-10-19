@@ -9,7 +9,7 @@ import { NodemailerMailService } from './nodemailer-mail.service.js';
 @Global()
 @Module({
   providers: [{ provide: 'MailSender', useClass: NodemailerMailService }],
-  exports: [NodemailerMailService],
+  exports: ['MailSender'],
 })
 export class MailModule {}
 

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { createPublicKey, type JsonWebKey } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -56,10 +57,8 @@ export class UmsJwksService {
   }
 
   private static createRsaPemFromJwk(jwk: UmsJwk): string {
-    // Lazy import to avoid bundling 'node:crypto' in consumers unnecessarily
-    const { createPublicKey } = require('node:crypto');
     const keyObj = createPublicKey({
-      key: jwk as unknown as object,
+      key: jwk as unknown as JsonWebKey,
       format: 'jwk',
     });
     return keyObj.export({ type: 'spki', format: 'pem' }).toString();
@@ -73,12 +72,12 @@ export class UmsJwksService {
     }
 
     // Check cache freshness
-    if (
-      this.cache &&
-      Date.now() - this.cache.fetchedAt < this.cacheTtlMs
-    ) {
+    if (this.cache && Date.now() - this.cache.fetchedAt < this.cacheTtlMs) {
       return this.cache.keys.reduce(
-        (acc, jwk) => ({ ...acc, [jwk.kid]: UmsJwksService.createRsaPemFromJwk(jwk) }),
+        (acc, jwk) => ({
+          ...acc,
+          [jwk.kid]: UmsJwksService.createRsaPemFromJwk(jwk),
+        }),
         {} as Record<string, string>,
       );
     }
@@ -97,7 +96,10 @@ export class UmsJwksService {
       this.cache = { keys, fetchedAt: Date.now() };
       this.logger.log(`JWKS cache updated (${keys.length} keys)`);
       return keys.reduce(
-        (acc, jwk) => ({ ...acc, [jwk.kid]: UmsJwksService.createRsaPemFromJwk(jwk) }),
+        (acc, jwk) => ({
+          ...acc,
+          [jwk.kid]: UmsJwksService.createRsaPemFromJwk(jwk),
+        }),
         {} as Record<string, string>,
       );
     } catch (err) {

@@ -1,6 +1,11 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { ContentStatus, Prisma } from '@prisma/client';
+import { ContentStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
 /**
@@ -46,7 +51,7 @@ export class ScheduledPublishService implements OnModuleInit, OnModuleDestroy {
               status: ContentStatus.PUBLISHED,
               publishedAt: now,
               publishedById: entry.publishedById,
-            } as Prisma.ContentEntryUpdateInput,
+            },
           }),
         ),
       );

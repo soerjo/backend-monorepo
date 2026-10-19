@@ -38,12 +38,10 @@ describeE2e('Auth flow (e2e)', () => {
     // Match the production pipeline (main.ts): without the interceptor/filter
     // the responses are bare and every envelope assertion here is meaningless.
     app.setGlobalPrefix('api');
-    const { ResponseTransformInterceptor } = await import(
-      './../src/common/interceptors/response-transform.interceptor.js'
-    );
-    const { AllExceptionsFilter } = await import(
-      './../src/common/filters/all-exceptions.filter.js'
-    );
+    const { ResponseTransformInterceptor } =
+      await import('./../src/common/interceptors/response-transform.interceptor.js');
+    const { AllExceptionsFilter } =
+      await import('./../src/common/filters/all-exceptions.filter.js');
     app.useGlobalInterceptors(new ResponseTransformInterceptor());
     app.useGlobalFilters(new AllExceptionsFilter());
     app.useGlobalPipes(
@@ -137,12 +135,10 @@ describeE2e('Epic 001 — password recovery (e2e)', () => {
     // Same production pipeline as the primary bootstrap - without these the
     // journeys read bare bodies and every envelope assertion fails.
     localApp.setGlobalPrefix('api');
-    const { ResponseTransformInterceptor: RTI } = await import(
-      './../src/common/interceptors/response-transform.interceptor.js'
-    );
-    const { AllExceptionsFilter: AEF } = await import(
-      './../src/common/filters/all-exceptions.filter.js'
-    );
+    const { ResponseTransformInterceptor: RTI } =
+      await import('./../src/common/interceptors/response-transform.interceptor.js');
+    const { AllExceptionsFilter: AEF } =
+      await import('./../src/common/filters/all-exceptions.filter.js');
     localApp.useGlobalInterceptors(new RTI());
     localApp.useGlobalFilters(new AEF());
     localApp.useGlobalPipes(
@@ -160,7 +156,11 @@ describeE2e('Epic 001 — password recovery (e2e)', () => {
     // (anti-enumeration) and every later login returns 401.
     await request(server)
       .post('/api/auth/register')
-      .send({ email: recoveryEmail, password: oldPassword, name: 'Recovery E2E' })
+      .send({
+        email: recoveryEmail,
+        password: oldPassword,
+        name: 'Recovery E2E',
+      })
       .expect(201);
   });
 
@@ -323,12 +323,10 @@ describeE2e('Epic 001 — email verification (e2e)', () => {
     // Same production pipeline as the primary bootstrap - without these the
     // journeys read bare bodies and every envelope assertion fails.
     localApp.setGlobalPrefix('api');
-    const { ResponseTransformInterceptor: RTI } = await import(
-      './../src/common/interceptors/response-transform.interceptor.js'
-    );
-    const { AllExceptionsFilter: AEF } = await import(
-      './../src/common/filters/all-exceptions.filter.js'
-    );
+    const { ResponseTransformInterceptor: RTI } =
+      await import('./../src/common/interceptors/response-transform.interceptor.js');
+    const { AllExceptionsFilter: AEF } =
+      await import('./../src/common/filters/all-exceptions.filter.js');
     localApp.useGlobalInterceptors(new RTI());
     localApp.useGlobalFilters(new AEF());
     localApp.useGlobalPipes(

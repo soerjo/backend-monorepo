@@ -8,10 +8,11 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { AuthService } from './auth.service.js';
 import { WebhookDispatcherService } from '../clients/webhook-dispatcher.service.js';
 import { AuditService } from '../audit/audit.service.js';
-import { AuthTokensRepository } from './auth-tokens.repository.js';
+import { SecurityPoliciesService } from '../security-policies/security-policies.service.js';
 import { hashPassword } from '../../common/utils/password.util.js';
 import { sha256Hex } from '../../common/utils/hash.util.js';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
+import { AuthTokensRepository } from './auth-tokens.repository.js';
 
 interface FakeSession {
   id: string;
@@ -45,7 +46,7 @@ describe('AuthService', () => {
   let createUser: jest.Mock;
   let userRoleFindMany: jest.Mock;
   let orgMemberFindMany: jest.Mock;
-
+  let mockSecurityPoliciesService: Partial<SecurityPoliciesService>;
   const fullUser = {
     id: 'user-1',
     email: 'user@example.com',
@@ -71,8 +72,30 @@ describe('AuthService', () => {
     findById = jest.fn();
     findByEmail = jest.fn();
     createUser = jest.fn();
-    userRoleFindMany = jest.fn().mockResolvedValue([]);
+    userRoleFindMany = jest
+      .fn()
+      .mockResolvedValue([
+        { role: { name: 'ums:admin', rolePermissions: [] } },
+      ]);
     orgMemberFindMany = jest.fn().mockResolvedValue([]);
+    const mockAuthTokensRepository = {
+      createPasswordResetToken: jest.fn(),
+      findValidPasswordResetToken: jest.fn(),
+      consumePasswordResetToken: jest.fn(),
+      findValidEmailVerifyToken: jest.fn(),
+      consumeEmailVerifyToken: jest.fn(),
+      createEmailVerifyToken: jest.fn(),
+    };
+    mockSecurityPoliciesService = {
+      getPolicies: jest.fn().mockResolvedValue({
+        accessTokenTtlMinutes: 15,
+        refreshTokenTtlDays: 30,
+        maxConcurrentSessions: 5,
+        requireMfaForAdmins: true,
+        enableAuditRetentionDays: 30,
+        allowPasswordReset: true,
+      }),
+    };
 
     const prisma = {
       session: {
@@ -120,12 +143,25 @@ describe('AuthService', () => {
           }
           return Promise.resolve({ count });
         }),
+        findMany: jest.fn(() => Promise.resolve(sessions)),
       },
       userRole: { findMany: userRoleFindMany },
       orgMember: { findMany: orgMemberFindMany },
       user: {
         create: createUser,
         findUnique: jest.fn(),
+      },
+      securityPolicy: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      mfaFactor: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'mfa-1',
+          userId: 'user-1',
+          secret: 'SECRET',
+          enabled: true,
+        }),
       },
     };
 
@@ -151,7 +187,7 @@ describe('AuthService', () => {
       jwtService as unknown as JwtService,
       configService as unknown as ConfigService,
       prisma as unknown as PrismaService,
-      {} as unknown as AuthTokensRepository,
+      mockAuthTokensRepository as unknown as AuthTokensRepository,
       { sendPasswordReset: jest.fn(), sendEmailVerification: jest.fn() },
       {
         log: jest.fn().mockResolvedValue(undefined),
@@ -159,6 +195,7 @@ describe('AuthService', () => {
       {
         dispatch: jest.fn().mockResolvedValue([]),
       } as unknown as WebhookDispatcherService,
+      mockSecurityPoliciesService as unknown as SecurityPoliciesService,
     );
   });
 

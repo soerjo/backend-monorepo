@@ -11,6 +11,7 @@ import { loadJwtRsaKeypair } from '../../common/utils/jwt-keypair.util.js';
 import { computeKeyId } from '../../common/utils/jwk.util.js';
 import { JWT_AZP, JWT_ISSUER } from './auth.constants.js';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
+import { SecurityPoliciesService } from '../security-policies/security-policies.service.js';
 
 interface DecodedHeader {
   alg: string;
@@ -30,6 +31,7 @@ describe('RS256 access token signing (UMS contract)', () => {
   let keypair: { privateKey: string; publicKey: string };
   let service: AuthService;
   let verifier: JwtService;
+  let mockSecurityPoliciesService: Partial<SecurityPoliciesService>;
 
   beforeEach(() => {
     const { privateKey }: { privateKey: KeyObject } = generateKeyPairSync(
@@ -56,6 +58,16 @@ describe('RS256 access token signing (UMS contract)', () => {
     const configService = {
       get: jest.fn(() => undefined),
     };
+    mockSecurityPoliciesService = {
+      getPolicies: jest.fn().mockResolvedValue({
+        accessTokenTtlMinutes: 15,
+        refreshTokenTtlDays: 30,
+        maxConcurrentSessions: 5,
+        requireMfaForAdmins: true,
+        enableAuditRetentionDays: 30,
+        allowPasswordReset: true,
+      }),
+    };
 
     service = new AuthService(
       {} as unknown as UsersRepository,
@@ -70,6 +82,7 @@ describe('RS256 access token signing (UMS contract)', () => {
       {
         dispatch: jest.fn().mockResolvedValue([]),
       } as unknown as WebhookDispatcherService,
+      mockSecurityPoliciesService as unknown as SecurityPoliciesService,
     );
   });
 

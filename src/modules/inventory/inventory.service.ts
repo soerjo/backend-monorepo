@@ -239,9 +239,7 @@ export class InventoryService {
 
     const baseByWarehouse = new Map(baseAgg.map((r) => [r.warehouseId, r]));
     const lowByWarehouse = new Map(lowAgg.map((r) => [r.warehouseId, r]));
-    const expireByWarehouse = new Map(
-      expireAgg.map((r) => [r.warehouseId, r]),
-    );
+    const expireByWarehouse = new Map(expireAgg.map((r) => [r.warehouseId, r]));
 
     return warehouses.map((w) => {
       const base = baseByWarehouse.get(w.id);

@@ -5,7 +5,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Kafka, Consumer, Partitioners } from 'kafkajs';
+import { Kafka, Consumer } from 'kafkajs';
 import { PosConsumerService } from './pos-consumer.service.js';
 import { PosEventPayload } from './interfaces/pos-event.interface.js';
 
@@ -41,9 +41,7 @@ export class PosKafkaConsumer implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const brokers = (
-      this.configService.get<string>('KAFKA_BROKERS') ?? ''
-    )
+    const brokers = (this.configService.get<string>('KAFKA_BROKERS') ?? '')
       .split(',')
       .map((b) => b.trim())
       .filter(Boolean);
@@ -52,7 +50,9 @@ export class PosKafkaConsumer implements OnModuleInit, OnModuleDestroy {
       this.configService.get<string>('KAFKA_CONSUMER_GROUP_ID') ??
       'wms-service-pos-events';
 
-    this.logger.log(`Connecting Kafka consumer to brokers: ${brokers.join(', ')}`);
+    this.logger.log(
+      `Connecting Kafka consumer to brokers: ${brokers.join(', ')}`,
+    );
     this.kafka = new Kafka({
       clientId: 'wms-service',
       brokers,
@@ -76,7 +76,9 @@ export class PosKafkaConsumer implements OnModuleInit, OnModuleDestroy {
     await this.consumer.run({
       eachMessage: async ({ topic, partition, message }) => {
         if (!message.value) {
-          this.logger.warn(`Empty message on ${topic} [${partition}] — skipped.`);
+          this.logger.warn(
+            `Empty message on ${topic} [${partition}] — skipped.`,
+          );
           return;
         }
         let payload: PosEventPayload;

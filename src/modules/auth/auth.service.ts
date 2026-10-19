@@ -21,6 +21,7 @@ import {
 } from '../../common/utils/hash.util.js';
 import { JWT_AZP } from './auth.constants.js';
 import { AuthTokensRepository } from './auth-tokens.repository.js';
+import * as mailTypes from '../mail/mail.types.js';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import type { RegisterDto } from './dto/register.dto.js';
 
@@ -52,6 +53,7 @@ export class AuthService {
     private configService: ConfigService,
     private prisma: PrismaService,
     private authTokensRepository: AuthTokensRepository,
+    private mailSender: mailTypes.MailSender,
   ) {}
 
   private get accessTokenTtlSeconds(): number {
@@ -394,10 +396,14 @@ export class AuthService {
       expiresAt,
     );
 
-    // Structured debug log carries the hash only — the raw token never lands in logs.
-    // Slice 5 replaces this with the mail module call.
-    this.prisma['logger']?.['debug']?.(
-      `PASSWORD_RESET token issued for user ${user.id} (hash ${tokenHash})`,
+    // Delivery (ADR 0004): the sender never throws and never changes the
+    // response — a mail failure is captured inside the mail module.
+    const webUrl =
+      this.configService.get<string>('APP_WEB_URL') ?? 'http://localhost:5173';
+    await this.mailSender.sendPasswordReset(
+      user.email,
+      rawToken,
+      `${webUrl.replace(/\/$/, '')}/reset-password`,
     );
   }
 
@@ -476,10 +482,14 @@ export class AuthService {
       expiresAt,
     );
 
-    // Structured debug log carries the hash only — the raw token never lands in logs.
-    // Slice 5 replaces this with the mail module call.
-    this.prisma['logger']?.['debug']?.(
-      `EMAIL_VERIFY token issued for user ${user.id} (hash ${tokenHash})`,
+    // Delivery (ADR 0004): the sender never throws and never changes the
+    // response — a mail failure is captured inside the mail module.
+    const webUrl =
+      this.configService.get<string>('APP_WEB_URL') ?? 'http://localhost:5173';
+    await this.mailSender.sendEmailVerification(
+      user.email,
+      rawToken,
+      `${webUrl.replace(/\/$/, '')}/verify-email`,
     );
   }
 }

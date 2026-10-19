@@ -150,6 +150,7 @@ describe('AuthService', () => {
       configService as unknown as ConfigService,
       prisma as unknown as PrismaService,
       {} as unknown as AuthTokensRepository,
+      { sendPasswordReset: jest.fn(), sendEmailVerification: jest.fn() },
     );
   });
 

@@ -61,6 +61,7 @@ describe('RS256 access token signing (UMS contract)', () => {
       configService as unknown as ConfigService,
       {} as unknown as PrismaService,
       {} as unknown as AuthTokensRepository,
+      { sendPasswordReset: jest.fn(), sendEmailVerification: jest.fn() },
     );
   });
 

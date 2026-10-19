@@ -98,9 +98,13 @@ erDiagram
 
 ## Ketegangan desain yang masih terbuka
 
-- **Dua mekanisme peran berdampingan:** `Role.name` unik **global** lewat `user_roles`, sementara
-  `org_members.role` adalah **string bebas** dengan default `member`. Belum ada aturan yang
-  menentukan mana yang menang saat keduanya menyebut peran untuk user yang sama.
+- ~~**Dua mekanisme peran berdampingan.**~~ **Sudah diputuskan** (ADR 0003, 19 Okt 2026):
+  **role bersifat global, bukan per-organisasi.** `user_roles` adalah satu-satunya sumber kebenaran
+  peran otorisasi, dan klaim `roles[]` cukup untuk keputusan akses. `org_members.role` **bukan**
+  peran otorisasi — ia hanya penanda keanggotaan dan tidak boleh dipakai sebagai dasar izin oleh
+  service manapun. Tidak ada perubahan skema yang diperlukan.
+  Tindak lanjut yang masih terbuka: membatasi nilai `org_members.role` dengan enum atau
+  menghapusnya, supaya tidak terus disalahpahami.
 - **`orgs[]` di klaim token berisi nama organisasi**, bukan id. Mengganti nama organisasi karena itu
   bersifat breaking bagi consumer.
 - **Tidak ada soft delete.** Penghapusan bersifat permanen dan cascade.

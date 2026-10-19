@@ -54,10 +54,14 @@ beserta anggotanya.
   eksternal)? Ini menentukan perlu-tidaknya OAuth2 client registry.
 - `[NEEDS INPUT]` Apakah permission akan ditegakkan di UMS atau cukup dibawa sebagai klaim dan
   ditegakkan masing-masing service?
-- `[NEEDS INPUT]` Apakah role perlu di-scope per organisasi? Saat ini `Role.name` unik global,
-  sementara `OrgMember.role` adalah string bebas — dua mekanisme peran yang berdampingan.
 - `[NEEDS INPUT]` Target SLA/ketersediaan. Saat ini seluruh platform berada di satu host.
 - `[NEEDS INPUT]` Kebijakan audit log: apa yang wajib tercatat dan berapa lama disimpan.
+
+## Sudah diputuskan
+
+- **Role bersifat global, bukan per-organisasi** (ADR 0003, 19 Oktober 2026). `user_roles` adalah
+  satu-satunya sumber peran otorisasi; `OrgMember.role` bukan peran otorisasi. Skema sekarang sudah
+  mendukung keputusan ini, jadi tidak ada migrasi yang diperlukan.
 
 ## Kriteria keberhasilan
 

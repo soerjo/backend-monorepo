@@ -6,6 +6,7 @@ import type { User } from '@prisma/client';
 import { UsersRepository } from '../users/users.repository.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AuthService } from './auth.service.js';
+import { AuditService } from '../audit/audit.service.js';
 import { AuthTokensRepository } from './auth-tokens.repository.js';
 import { hashPassword } from '../../common/utils/password.util.js';
 import { sha256Hex } from '../../common/utils/hash.util.js';
@@ -151,6 +152,9 @@ describe('AuthService', () => {
       prisma as unknown as PrismaService,
       {} as unknown as AuthTokensRepository,
       { sendPasswordReset: jest.fn(), sendEmailVerification: jest.fn() },
+      {
+        log: jest.fn().mockResolvedValue(undefined),
+      } as unknown as AuditService,
     );
   });
 

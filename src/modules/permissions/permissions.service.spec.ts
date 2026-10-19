@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PermissionsService } from './permissions.service.js';
 import { PermissionsRepository } from './permissions.repository.js';
+import { AuditService } from '../audit/audit.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ConflictException } from '@nestjs/common';
 
@@ -27,6 +28,7 @@ describe('PermissionsService', () => {
       providers: [
         PermissionsService,
         PermissionsRepository,
+        { provide: AuditService, useValue: { log: jest.fn() } },
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();

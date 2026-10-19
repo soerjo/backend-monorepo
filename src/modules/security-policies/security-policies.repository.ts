@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service.js';
 import { UpdateSecurityPolicyDto } from './dto/update-security-policies.dto';
 import { SecurityPolicy } from '@prisma/client';
 

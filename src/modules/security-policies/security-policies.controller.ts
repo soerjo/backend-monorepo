@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Patch } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { UMS_ADMIN_ROLE } from 'src/modules/auth/auth.constants';
+import { Roles } from '../../common/decorators/roles.decorator.js';
+import { UMS_ADMIN_ROLE } from '../auth/auth.constants.js';
 import { UpdateSecurityPolicyDto } from './dto/update-security-policies.dto';
 import { SecurityPoliciesService } from './security-policies.service';
 

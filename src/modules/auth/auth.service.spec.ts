@@ -160,7 +160,6 @@ describe('AuthService', () => {
       {
         log: jest.fn().mockResolvedValue(undefined),
       } as unknown as AuditService,
-      mfaService,
     );
   });
 

@@ -22,11 +22,10 @@ import {
 import { JWT_AZP } from './auth.constants.js';
 import { AuthTokensRepository } from './auth-tokens.repository.js';
 import type { MailSender } from '../mail/mail.types.js';
-import { Inject, forwardRef } from '@nestjs/common';
+import { Inject } from '@nestjs/common';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import type { RegisterDto } from './dto/register.dto.js';
 import { AuditService } from '../audit/audit.service.js';
-import { MfaService } from '../mfa/mfa.service.js';
 
 export interface RequestMeta {
   userAgent?: string | null;
@@ -37,12 +36,6 @@ export interface IssuedTokens {
   accessToken: string;
   refreshToken: string;
   user: AuthUser;
-}
-
-export interface MfaRequiredResult {
-  mfaRequired: true;
-  challengeId: string;
-  expiresIn: number;
 }
 
 export interface PublicUser {
@@ -64,8 +57,6 @@ export class AuthService {
     private authTokensRepository: AuthTokensRepository,
     @Inject('MailSender') private mailSender: MailSender,
     private auditService: AuditService,
-    @Inject(forwardRef(() => MfaService))
-    private mfaService: MfaService,
   ) {}
 
   private get accessTokenTtlSeconds(): number {
@@ -244,14 +235,7 @@ export class AuthService {
     return this.toPublicUser(user);
   }
 
-  async login(
-    user: AuthUser,
-    meta: RequestMeta = {},
-  ): Promise<IssuedTokens | MfaRequiredResult> {
-    const mfaEnabled = await this.mfaService.isEnabled(user.id);
-    if (mfaEnabled) {
-      return this.mfaService.createChallenge(user.id);
-    }
+  async login(user: AuthUser, meta: RequestMeta = {}): Promise<IssuedTokens> {
     const { refreshToken } = await this.createSession(
       user.id,
       randomUUID(),

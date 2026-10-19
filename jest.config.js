@@ -6,6 +6,7 @@ module.exports = {
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
     '^src/(.*)$': '<rootDir>/src/$1',
+    '^otplib$': '<rootDir>/test/mocks/otplib.js',
   },
   setupFilesAfterEnv: ['<rootDir>/test/test-setup.ts'],
   testTimeout: 30000,

@@ -21,6 +21,7 @@ import type { CookieOptions, Request, Response } from 'express';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import { parseCookieHeader } from '../../common/utils/cookie.util.js';
 import { AuthService, type RequestMeta } from './auth.service.js';
+import { MfaService } from '../mfa/mfa.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
@@ -36,7 +37,10 @@ import { REFRESH_COOKIE_NAME, REFRESH_COOKIE_PATH } from './auth.constants.js';
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly mfaService: MfaService,
+  ) {}
 
   @Public()
   @Post('register')
@@ -56,6 +60,12 @@ export class AuthController {
     @Req() req: Request & { user: AuthUser },
     @Res({ passthrough: true }) res: Response,
   ) {
+    // MFA gate: a user with an enabled TOTP factor must not receive tokens
+    // until they complete a challenge (ADR 0006). Kept in the controller so
+    // AuthService and MfaService avoid a circular import.
+    if (await this.mfaService.isEnabled(req.user.id)) {
+      return this.mfaService.createChallenge(req.user.id);
+    }
     const tokens = await this.authService.login(
       req.user,
       this.requestMeta(req),

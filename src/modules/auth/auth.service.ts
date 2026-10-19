@@ -2,6 +2,7 @@ import { forwardRef } from '@nestjs/common';
 import {
   BadRequestException,
   Injectable,
+  ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -28,6 +29,7 @@ import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import { WebhookDispatcherService } from '../clients/webhook-dispatcher.service.js';
 import type { RegisterDto } from './dto/register.dto.js';
 import { AuditService } from '../audit/audit.service.js';
+import { SecurityPoliciesService } from '../security-policies/security-policies.service.js';
 
 export interface RequestMeta {
   userAgent?: string | null;
@@ -61,18 +63,17 @@ export class AuthService {
     private auditService: AuditService,
     @Inject(forwardRef(() => WebhookDispatcherService))
     private readonly webhookDispatcherService: WebhookDispatcherService,
+    private readonly securityPoliciesService: SecurityPoliciesService,
   ) {}
 
-  private get accessTokenTtlSeconds(): number {
-    return parseDurationToSeconds(
-      this.configService.get<string>('JWT_ACCESS_EXPIRATION') ?? '15m',
-    );
+  public get accessTokenTtlSeconds(): number {
+    const raw = this.configService.get<string>('JWT_ACCESS_EXPIRATION');
+    return parseDurationToSeconds(raw ?? '15m');
   }
 
-  get refreshTokenTtlSeconds(): number {
-    return parseDurationToSeconds(
-      this.configService.get<string>('JWT_REFRESH_EXPIRATION') ?? '30d',
-    );
+  public get refreshTokenTtlSeconds(): number {
+    const raw = this.configService.get<string>('JWT_REFRESH_EXPIRATION');
+    return parseDurationToSeconds(raw ?? '7d');
   }
 
   private async loadRoles(userId: string): Promise<string[]> {
@@ -167,9 +168,30 @@ export class AuthService {
     family: string,
     meta: RequestMeta,
   ): Promise<{ refreshToken: string; refreshHash: string; expiresAt: Date }> {
+    const policies = await this.securityPoliciesService.getPolicies();
+
+    // Enforce max concurrent sessions
+    const activeSessions = await this.prisma.session.findMany({
+      where: { userId, revokedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (activeSessions.length >= policies.maxConcurrentSessions) {
+      const sessionsToRevoke =
+        activeSessions.length - policies.maxConcurrentSessions + 1;
+      for (let i = 0; i < sessionsToRevoke; i++) {
+        await this.prisma.session.update({
+          where: { id: activeSessions[i].id },
+          data: { revokedAt: new Date() },
+        });
+      }
+    }
+
     const refreshToken = generateOpaqueToken();
     const refreshHash = sha256Hex(refreshToken);
-    const expiresAt = new Date(Date.now() + this.refreshTokenTtlSeconds * 1000);
+    const expiresAt = new Date(
+      Date.now() + policies.refreshTokenTtlDays * 24 * 60 * 60 * 1000,
+    );
 
     await this.prisma.session.create({
       data: {
@@ -183,13 +205,6 @@ export class AuthService {
     });
 
     return { refreshToken, refreshHash, expiresAt };
-  }
-
-  private async revokeFamily(family: string): Promise<void> {
-    await this.prisma.session.updateMany({
-      where: { family, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
   }
 
   async validateUser(
@@ -206,7 +221,22 @@ export class AuthService {
       return null;
     }
 
-    return this.toAuthUser(user);
+    const authUser = await this.toAuthUser(user);
+    const policies = await this.securityPoliciesService.getPolicies();
+
+    // Enforce MFA for admins
+    if (policies.requireMfaForAdmins && authUser.roles.includes('ums:admin')) {
+      const mfaFactor = await this.prisma.mfaFactor.findFirst({
+        where: { userId: user.id, enabled: true },
+      });
+      if (!mfaFactor) {
+        throw new ForbiddenException(
+          'MFA is required for administrators. Please enroll in MFA.',
+        );
+      }
+    }
+
+    return authUser;
   }
 
   async validateUserById(id: string): Promise<AuthUser | null> {
@@ -417,6 +447,12 @@ export class AuthService {
     }
     return this.toAuthUser(user);
   }
+  private async revokeFamily(family: string): Promise<void> {
+    await this.prisma.session.updateMany({
+      where: { family, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
 
   async cleanupExpiredSessions(): Promise<number> {
     const result = await this.prisma.session.deleteMany({
@@ -463,6 +499,13 @@ export class AuthService {
    * the user is slice 5's concern; here it is only logged (hash, never raw).
    */
   async requestPasswordReset(email: string): Promise<void> {
+    const policies = await this.securityPoliciesService.getPolicies();
+    if (!policies.allowPasswordReset) {
+      throw new BadRequestException(
+        'Password reset is disabled by security policy',
+      );
+    }
+
     const user = await this.usersRepository
       .findByEmail(email)
       .catch(() => null);
@@ -502,6 +545,13 @@ export class AuthService {
    * Invalid, expired, and used tokens collapse into one identical error.
    */
   async resetPassword(token: string, newPassword: string): Promise<void> {
+    const policies = await this.securityPoliciesService.getPolicies();
+    if (!policies.allowPasswordReset) {
+      throw new BadRequestException(
+        'Password reset is disabled by security policy',
+      );
+    }
+
     const tokenHash = sha256Hex(token);
     const authToken =
       await this.authTokensRepository.findValidPasswordResetToken(tokenHash);

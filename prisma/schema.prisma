@@ -241,3 +241,17 @@ model IdentityProvider {
 
   @@map("identity_providers")
 }
+
+model SecurityPolicy {
+  id                       String   @id @default("default")
+  accessTokenTtlMinutes    Int      @default(15)
+  refreshTokenTtlDays      Int      @default(30)
+  maxConcurrentSessions    Int      @default(5)
+  requireMfaForAdmins      Boolean  @default(true)
+  enableAuditRetentionDays Int      @default(30)
+  allowPasswordReset       Boolean  @default(true)
+  updatedAt                DateTime @updatedAt
+  createdAt                DateTime @default(now())
+
+  @@map("security_policies")
+}

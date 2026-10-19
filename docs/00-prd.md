@@ -57,6 +57,50 @@ beserta anggotanya.
 - `[NEEDS INPUT]` Target SLA/ketersediaan. Saat ini seluruh platform berada di satu host.
 - `[NEEDS INPUT]` Kebijakan audit log: apa yang wajib tercatat dan berapa lama disimpan.
 
+## Kondisi target menurut desain
+
+Desain Stitch **"Enterprise UMS Dashboard"** (`6437226935783627922`, 9 layar, 19 Oktober 2026)
+menggambarkan UMS sebagai produk IAM setingkat Keycloak/Auth0 — jauh di atas kemampuan sekarang.
+Dipelajari dari HTML tiap layar, bukan dari screenshot.
+
+Kemampuan yang digambarkan desain tetapi **belum ada sama sekali** di kode:
+
+- **MFA** — kolom MFA di direktori user; faktor TOTP, FIDO2/WebAuthn, Passkey device-bound.
+  SMS OTP sengaja ditandai *Strictly Prohibited* di desain.
+- **Audit log & telemetri autentikasi** — Timestamp, Event Identity, Severity, Actor/Subject,
+  Origin & Geo-IP, Client Agent, Status, plus kebijakan retensi.
+- **Kredensial M2M & webhook** — client registry (client id, scope, rate limit, CIDR allowlist),
+  endpoint webhook, dan event stream dengan replay.
+- **Kebijakan keamanan adaptif** — risk engine berbasis geo-velocity, deteksi Tor/VPN, device
+  fingerprint, step-up challenge, killswitch credential stuffing.
+- **Federasi SAML 2.0 / OIDC** — UMS sebagai service provider yang mempercayai IdP eksternal.
+- **Billing & seat allocation** — langganan, invoice, alokasi kursi enterprise.
+- **Impersonasi user** (`users:impersonate.ephemeral`) dan **rotasi kunci** (`crypto:keys.rotate`).
+
+Kemampuan desain yang **sudah didukung sebagian** oleh skema sekarang:
+
+- **Session manager** — `Session` sudah menyimpan `userAgent`, `ip`, `family`. Yang kurang hanya
+  endpoint baca/cabut selektif. Menjadi **epic 002**.
+- **Matriks role × permission** — `Permission`, `RolePermission`, dan `PUT /roles/:id/permissions`
+  sudah ada; desain hanya menuntut UI dan konvensi penamaan yang lebih kaya.
+
+> **Peringatan cakupan.** Jika desain ini diperlakukan sebagai spesifikasi pembangunan, isinya
+> setara beberapa kuartal kerja dan sekitar sepuluh tabel baru, bukan pekerjaan UI. Dokumen ini
+> mencatatnya sebagai **arah**, bukan sebagai komitmen. Pertanyaan yang harus dijawab lebih dulu
+> ada di `platform-docs/docs/07-open-architecture-questions.md`.
+
+## Non-goals yang ditantang desain
+
+Dua non-goal yang berlaku sekarang **bertentangan** dengan desain, dan konfliknya belum
+diselesaikan:
+
+- PRD ini menyatakan UMS *bukan* identity provider pihak ketiga. Desain memuat federasi SAML/OIDC.
+- PRD ini menyatakan UMS tidak melayani konsumen di luar platform. Desain memuat client registry
+  M2M dan billing per-seat, yang hanya masuk akal untuk konsumen eksternal.
+
+`[NEEDS INPUT]` Mana yang menang — PRD atau desain — adalah keputusan produk, bukan keputusan agent.
+Sampai diputuskan, non-goal di atas **tetap berlaku** dan layar-layar tersebut tidak diimplementasikan.
+
 ## Sudah diputuskan
 
 - **Role bersifat global, bukan per-organisasi** (ADR 0003, 19 Oktober 2026). `user_roles` adalah

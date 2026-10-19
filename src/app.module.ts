@@ -13,6 +13,7 @@ import { AuditModule } from './modules/audit/audit.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { MetricsModule } from './modules/metrics/metrics.module.js';
 import { SessionsModule } from './modules/sessions/sessions.module.js';
+import { ClientsModule } from './modules/clients/clients.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { loggerConfig } from './config/logger.config.js';
@@ -42,6 +43,7 @@ import { validate } from './config/env.validation.js';
     AuditModule,
     HealthModule,
     MetricsModule,
+    ClientsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

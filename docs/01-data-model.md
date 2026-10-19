@@ -1,6 +1,6 @@
 # Data Model — ums-service
 
-PostgreSQL via Prisma 6. Sumber kebenaran: `prisma/schema.prisma` (9 model, 2 enum).
+PostgreSQL via Prisma 6. Sumber kebenaran: `prisma/schema.prisma` (12 model, 3 enum).
 Diagram di bawah digenerate ulang dari schema — jika schema berubah, perbarui dokumen ini di PR yang sama.
 
 ## ERD
@@ -15,6 +15,7 @@ erDiagram
     roles ||--o{ role_permissions : "memberi"
     permissions ||--o{ role_permissions : "diberikan"
     organizations ||--o{ org_members : "beranggotakan"
+    webhook_endpoints ||--o{ webhook_deliveries : "mengirim"
 
     users {
         uuid id PK
@@ -66,6 +67,36 @@ erDiagram
         datetime expiresAt
         datetime usedAt "nullable"
     }
+    api_clients {
+        uuid id PK
+        string name
+        string clientId UK
+        string clientSecretHash "SHA-256"
+        string[] scopes
+        int rateLimitPerMinute "default: 60"
+        datetime lastUsedAt "nullable"
+        boolean active "default: true"
+        datetime createdAt
+    }
+    webhook_endpoints {
+        uuid id PK
+        string url
+        string secretHash "SHA-256"
+        string secretEnc "AES-256-GCM"
+        string[] events
+        boolean active "default: true"
+        datetime createdAt
+    }
+    webhook_deliveries {
+        uuid id PK
+        uuid endpointId FK
+        string event
+        enum status "SUCCESS | FAILED"
+        int attempt
+        int responseCode "nullable"
+        int latencyMs "nullable"
+        datetime createdAt
+    }
 ```
 
 ## Invariant
@@ -80,13 +111,24 @@ erDiagram
 5. **Junction memakai composite primary key**, bukan surrogate id: `user_roles(userId, roleId)`,
    `role_permissions(roleId, permissionId)`, `org_members(orgId, userId)`.
 6. **`auth_tokens.usedAt` sekali pakai** — token yang sudah terpakai tidak boleh diterima lagi.
+7. **Client secret M2M hanya sebagai SHA-256** di `api_clients.clientSecretHash`; nilai mentah
+   hanya dikembalikan sekali saat pembuatan client.
+8. **Webhook signing secret tidak tersimpan mentah.** `webhook_endpoints.secretHash` adalah
+   SHA-256 (untuk verifikasi), dan `secretEnc` adalah ciphertext AES-256-GCM yang didekripsi
+   hanya di dalam proses untuk menghitung `X-Signature` (`HMAC-SHA256`). Kunci enkripsi
+   diturunkan via HKDF dari key material JWT yang sama, sehingga rotasi kunci JWT membuat
+   `secretEnc` lama tidak dapat didekripsi (endpoint harus di-register ulang).
+9. **Satu baris `webhook_deliveries` per percobaan.** `attempt` menandai urutan (1..3);
+   percobaan berhenti pada status `SUCCESS` pertama. Relasi ke `webhook_endpoints` cascade
+   on delete.
 
 ## Index
 
 - `sessions(userId)` dan `sessions(family)` — pencarian sesi per user dan pencabutan satu family.
 - `auth_tokens(userId, type)` — composite, untuk mencari token verifikasi/reset aktif per user.
+- `webhook_deliveries(endpointId, createdAt)` — composite, membaca riwayat pengiriman per endpoint.
 - Unique: `users.email`, `roles.name`, `permissions.name`, `organizations.name`,
-  `sessions.refreshHash`, `auth_tokens.tokenHash`.
+  `sessions.refreshHash`, `auth_tokens.tokenHash`, `api_clients.clientId`.
 
 ## Kebijakan migrasi
 

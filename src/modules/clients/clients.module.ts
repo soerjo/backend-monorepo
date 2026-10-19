@@ -22,7 +22,7 @@ import { WebhooksService } from './webhooks.service.js';
   imports: [
     forwardRef(() => AuthModule),
     JwtModule.registerAsync({
-      imports: [AuthModule],
+      imports: [forwardRef(() => AuthModule)],
       inject: [JwtKeysService],
       useFactory: (jwtKeysService: JwtKeysService): JwtModuleOptions => ({
         privateKey: jwtKeysService.privateKey,

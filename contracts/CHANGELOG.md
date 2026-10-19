@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial release of the OpenAPI contract (auto-generated).
+- **Mail module (slice 5, ADR 0004)**: `ums-service` now sends password-reset and
+  email-verification messages directly (Nodemailer + SMTP Hostinger). Transport
+  selected by `MAIL_TRANSPORT` (`log` default — message recorded in the app log,
+  no network; `smtp` — relay built from `SMTP_HOST`/`SMTP_PORT`/`SMTP_SECURE`/
+  `SMTP_USER`/`SMTP_PASSWORD`, sender stamped with `MAIL_FROM`, links built from
+  `APP_WEB_URL`). Mail failures never fail token issuance nor alter endpoint
+  responses (anti-enumeration). No endpoint shape change — contract additions
+  below remain the only endpoint delta of the epic.
 - `POST /api/auth/forgot-password` — issue a single-use PASSWORD_RESET token for an
   active user; always responds `200` with `data: null` (anti-enumeration). Throttled
   5 requests / 60 s, same as login. Additive, non-breaking.

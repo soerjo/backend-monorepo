@@ -103,6 +103,39 @@ class EnvironmentVariables {
   @IsNumber()
   @IsOptional()
   AUTH_TOKEN_TTL_HOURS: number = 24;
+
+  // Mail (ADR 0004): 'log' = dev (no network), 'smtp' = real delivery.
+  @IsString()
+  @IsOptional()
+  MAIL_TRANSPORT: string = 'log';
+
+  @IsString()
+  @IsOptional()
+  SMTP_HOST?: string;
+
+  @IsString()
+  @IsOptional()
+  SMTP_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  SMTP_SECURE?: string;
+
+  @IsString()
+  @IsOptional()
+  SMTP_USER?: string;
+
+  @IsString()
+  @IsOptional()
+  SMTP_PASSWORD?: string;
+
+  @IsString()
+  @IsOptional()
+  MAIL_FROM?: string;
+
+  @IsString()
+  @IsOptional()
+  APP_WEB_URL: string = 'http://localhost:5173';
 }
 
 export function validate(config: Record<string, unknown>) {

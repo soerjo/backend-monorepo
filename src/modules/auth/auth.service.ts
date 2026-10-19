@@ -257,6 +257,28 @@ export class AuthService {
   }
 
   /**
+   * Signs in an existing, active user identified by a federated (OIDC) email.
+   * v1 policy: no auto-provisioning — the email must already match an ACTIVE
+   * user (explicit linking). See platform-docs Q5 / ADR 0006.
+   */
+  async federatedLogin(
+    email: string,
+    meta: RequestMeta = {},
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: AuthUser;
+  }> {
+    const user = await this.usersRepository
+      .findByEmail(email)
+      .catch(() => null);
+    if (!user || user.status !== $Enums.UserStatus.ACTIVE) {
+      throw new UnauthorizedException('No linked account for this email');
+    }
+    return this.issueTokensForUser(user.id, meta);
+  }
+
+  /**
    * Issues a fresh token pair for an already-authenticated user
    * (used by the MFA challenge flow after successful TOTP verification).
    */

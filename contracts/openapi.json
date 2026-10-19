@@ -1771,6 +1771,164 @@
           "Webhooks"
         ]
       }
+    },
+    "/federation/idps": {
+      "get": {
+        "operationId": "FederationAdminController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of IdPs"
+          }
+        },
+        "summary": "List configured identity providers (no secrets)",
+        "tags": [
+          "Federation"
+        ]
+      },
+      "post": {
+        "operationId": "FederationAdminController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIdentityProviderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Register an OIDC identity provider",
+        "tags": [
+          "Federation"
+        ]
+      }
+    },
+    "/federation/idps/{id}": {
+      "patch": {
+        "operationId": "FederationAdminController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateIdentityProviderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Update an identity provider",
+        "tags": [
+          "Federation"
+        ]
+      },
+      "delete": {
+        "operationId": "FederationAdminController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Remove an identity provider",
+        "tags": [
+          "Federation"
+        ]
+      }
+    },
+    "/auth/oidc/{idpId}/start": {
+      "get": {
+        "operationId": "FederationBrowserController_start",
+        "parameters": [
+          {
+            "name": "idpId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Begin OIDC login — redirects to the IdP",
+        "tags": [
+          "Federation"
+        ]
+      }
+    },
+    "/auth/oidc/{idpId}/callback": {
+      "get": {
+        "operationId": "FederationBrowserController_callback",
+        "parameters": [
+          {
+            "name": "idpId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "OIDC callback — exchanges code, matches by email",
+        "tags": [
+          "Federation"
+        ]
+      }
     }
   },
   "info": {
@@ -2200,6 +2358,82 @@
           "active": {
             "type": "boolean",
             "example": true,
+            "default": true
+          }
+        }
+      },
+      "CreateIdentityProviderDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "company-google"
+          },
+          "issuer": {
+            "type": "string",
+            "example": "https://accounts.google.com"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecret": {
+            "type": "string",
+            "description": "Client secret — stored encrypted, never returned"
+          },
+          "scopes": {
+            "example": [
+              "openid",
+              "email",
+              "profile"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "active": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "name",
+          "issuer",
+          "clientId",
+          "clientSecret"
+        ]
+      },
+      "UpdateIdentityProviderDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "company-google"
+          },
+          "issuer": {
+            "type": "string",
+            "example": "https://accounts.google.com"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecret": {
+            "type": "string",
+            "description": "Client secret — stored encrypted, never returned"
+          },
+          "scopes": {
+            "example": [
+              "openid",
+              "email",
+              "profile"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "active": {
+            "type": "boolean",
             "default": true
           }
         }

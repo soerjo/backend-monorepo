@@ -2,6 +2,7 @@ import { generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service.js';
+import { AuthTokensRepository } from './auth-tokens.repository.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { loadJwtRsaKeypair } from '../../common/utils/jwt-keypair.util.js';
@@ -59,6 +60,7 @@ describe('RS256 access token signing (UMS contract)', () => {
       signer,
       configService as unknown as ConfigService,
       {} as unknown as PrismaService,
+      {} as unknown as AuthTokensRepository,
     );
   });
 

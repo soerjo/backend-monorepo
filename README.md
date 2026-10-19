@@ -4,7 +4,9 @@
 
 **UMS (User Management Service)** adalah layanan identitas terpusat untuk seluruh ekosistem aplikasi Mas Soerjo (bank-sampah, CMS, aplikasi berikutnya). Ia memegang **Authentication** (login/register/session) dan **Authorization kasar** (roles, permissions, organizations); keputusan otorisasi fine-grained tetap di masing-masing BE aplikasi.
 
-> Kontrak desain lengkap ada di [`DESIGN.md`](./DESIGN.md). Dokumen ini adalah panduan penggunaan & referensi teknis.
+> Dokumentasi lengkap ada di [`docs/`](./docs/README.md): PRD, data model (ERD), design patterns, dan operasional.
+> Kontrak HTTP digenerate dari Swagger ke `contracts/openapi.json` — jangan ditulis tangan.
+> Fakta lintas service ada di [`docs/platform/PLATFORM.md`](./docs/platform/PLATFORM.md) (GENERATED).
 
 ## Kemampuan
 
@@ -186,7 +188,8 @@ bun run build
 
 - **my-cms-service** — konsumen JWKS; CMS memverifikasi JWT UMS via public key
 - **my-nextjs-template** — basis FE dengan auth system yang mengonsumsi endpoint `/auth/*` di atas
-- **DESIGN.md** — kontrak desain v1 (sumber kebenaran arsitektur)
+- **docs/** — dokumentasi Tier-1: `00-prd.md`, `01-data-model.md`, `02-patterns.md`, `03-operations.md`
+- **docs/platform/PLATFORM.md** — digest Tier-0 platform (GENERATED dari `soerjo/platform-docs`)
 
 ## License
 

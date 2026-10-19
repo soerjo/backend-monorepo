@@ -48,7 +48,9 @@ export class RolesController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a role (protected from admin role & assigned users)' })
+  @ApiOperation({
+    summary: 'Delete a role (protected from admin role & assigned users)',
+  })
   async remove(@Param('id') id: string) {
     return this.rolesService.remove(id);
   }

@@ -44,7 +44,9 @@ export class PermissionsRepository {
       where: { name: dto.name },
     });
     if (existing) {
-      throw new ConflictException(`Permission with name '${dto.name}' already exists`);
+      throw new ConflictException(
+        `Permission with name '${dto.name}' already exists`,
+      );
     }
 
     return this.prisma.permission.create({
@@ -63,7 +65,9 @@ export class PermissionsRepository {
         where: { name: dto.name },
       });
       if (existing && existing.id !== id) {
-        throw new ConflictException(`Permission with name '${dto.name}' already exists`);
+        throw new ConflictException(
+          `Permission with name '${dto.name}' already exists`,
+        );
       }
     }
 

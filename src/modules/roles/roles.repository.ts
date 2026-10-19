@@ -71,10 +71,12 @@ export class RolesRepository {
       where: { name: dto.name },
     });
     if (existing) {
-      throw new ConflictException(`Role with name '${dto.name}' already exists`);
+      throw new ConflictException(
+        `Role with name '${dto.name}' already exists`,
+      );
     }
 
-    let permissionIds = dto.permissionIds ?? [];
+    const permissionIds = dto.permissionIds ?? [];
     if (permissionIds.length > 0) {
       const perms = await this.prisma.permission.findMany({
         where: { id: { in: permissionIds } },
@@ -117,7 +119,9 @@ export class RolesRepository {
         where: { name: dto.name },
       });
       if (existing && existing.id !== id) {
-        throw new ConflictException(`Role with name '${dto.name}' already exists`);
+        throw new ConflictException(
+          `Role with name '${dto.name}' already exists`,
+        );
       }
     }
 
@@ -155,7 +159,9 @@ export class RolesRepository {
     }
 
     if (role.name === UMS_ADMIN_ROLE) {
-      throw new ForbiddenException(`Role '${UMS_ADMIN_ROLE}' cannot be deleted`);
+      throw new ForbiddenException(
+        `Role '${UMS_ADMIN_ROLE}' cannot be deleted`,
+      );
     }
 
     if (role._count.userRoles > 0) {
@@ -183,7 +189,10 @@ export class RolesRepository {
     await this.prisma.$transaction([
       this.prisma.rolePermission.deleteMany({ where: { roleId: id } }),
       this.prisma.rolePermission.createMany({
-        data: permissionIds.map((permissionId) => ({ roleId: id, permissionId })),
+        data: permissionIds.map((permissionId) => ({
+          roleId: id,
+          permissionId,
+        })),
       }),
     ]);
 

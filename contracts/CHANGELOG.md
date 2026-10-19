@@ -51,3 +51,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   active unverified user; always `200` `data: null` regardless of email state
   (anti-enumeration). Throttled 5/60s. Additive, non-breaking.
 - New env: `AUTH_TOKEN_TTL_HOURS` (default `24`) — TTL of EMAIL_VERIFY tokens.
+- **API credentials (M2M) + Webhooks module**: new `src/modules/clients/` area.
+  Machine clients authenticate with a `client_credentials` grant and receive a
+  1-hour RS256 access token (same keypair/`kid` as user tokens; claims
+  `sub`/`azp` = `clientId`, plus `scopes`). Webhook endpoints receive signed
+  deliveries (`X-Signature` = HMAC-SHA256 of the raw body) with 3 attempts and
+  5 s backoff, recorded per attempt. Additive, non-breaking.
+- `POST /api/clients` — create an API client; `clientId` is `svc_<24 hex>` and the
+  raw `clientSecret` is returned exactly once (DB stores only its SHA-256 hash).
+  Admin-gated (`ums:admin`). Additive, non-breaking.
+- `GET /api/clients`, `GET /api/clients/:id`, `PATCH /api/clients/:id`,
+  `POST /api/clients/:id/revoke` — list/read/update/revoke API clients (revoke
+  sets `active = false`). Admin-gated. Additive, non-breaking.
+- `POST /api/oauth/token` — public `client_credentials` grant (`client_id` +
+  `client_secret`), returns `{ access_token, token_type, expires_in, scope }`
+  wrapped in the standard response envelope. Throttled 60/60 s per IP plus a
+  per-client in-memory limit (`rateLimitPerMinute`, default 60). Additive,
+  non-breaking.
+- `GET /api/webhooks`, `POST /api/webhooks`, `GET /api/webhooks/:id`,
+  `PATCH /api/webhooks/:id`, `DELETE /api/webhooks/:id` — webhook endpoint CRUD;
+  the raw signing secret is returned once (stored as SHA-256 hash plus an
+  AES-256-GCM ciphertext used only for HMAC signing). Admin-gated. Additive,
+  non-breaking.
+- `POST /api/webhooks/:id/test` — dispatch a `webhook.test` event through the
+  dispatcher to that endpoint. Admin-gated. Additive, non-breaking.
+- New models: `ApiClient`, `WebhookEndpoint`, `WebhookDelivery` (+ enum
+  `WebhookDeliveryStatus`). Migration is additive only.

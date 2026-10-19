@@ -176,4 +176,52 @@ model MfaFactor {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("mfa_factors")
+
+enum WebhookDeliveryStatus {
+  SUCCESS
+  FAILED
+}
+
+model ApiClient {
+  id                 String    @id @default(uuid())
+  name               String
+  clientId           String    @unique
+  clientSecretHash   String
+  scopes             String[]  @default([])
+  rateLimitPerMinute Int       @default(60)
+  lastUsedAt         DateTime?
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+
+  @@map("api_clients")
+}
+
+model WebhookEndpoint {
+  id         String   @id @default(uuid())
+  url        String
+  secretHash String
+  secretEnc  String
+  events     String[]
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  deliveries WebhookDelivery[]
+
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id           String                @id @default(uuid())
+  endpointId   String
+  event        String
+  status       WebhookDeliveryStatus
+  attempt      Int
+  responseCode Int?
+  latencyMs    Int?
+  createdAt    DateTime              @default(now())
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+  @@map("webhook_deliveries")
 }

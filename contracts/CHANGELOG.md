@@ -16,3 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   password hash (argon2id), and revoke every active session of the user. Single
   shared error for invalid/expired/used tokens. Additive, non-breaking.
 - New env: `AUTH_TOKEN_TTL_MINUTES` (default `60`) — TTL of PASSWORD_RESET tokens.
+- `POST /api/auth/verify-email` — consume an EMAIL_VERIFY token, fill
+  `users.emailVerifiedAt` (verified email is never reset by token traffic).
+  Single shared error for invalid/expired/used tokens. Additive, non-breaking.
+- `POST /api/auth/resend-verification` — issue a fresh EMAIL_VERIFY token for an
+  active unverified user; always `200` `data: null` regardless of email state
+  (anti-enumeration). Throttled 5/60s. Additive, non-breaking.
+- New env: `AUTH_TOKEN_TTL_HOURS` (default `24`) — TTL of EMAIL_VERIFY tokens.

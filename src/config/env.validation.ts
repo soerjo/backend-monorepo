@@ -99,6 +99,10 @@ class EnvironmentVariables {
   @IsNumber()
   @IsOptional()
   AUTH_TOKEN_TTL_MINUTES: number = 60;
+
+  @IsNumber()
+  @IsOptional()
+  AUTH_TOKEN_TTL_HOURS: number = 24;
 }
 
 export function validate(config: Record<string, unknown>) {

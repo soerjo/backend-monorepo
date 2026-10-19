@@ -355,6 +355,16 @@ export class AuthService {
   }
 
   /**
+   * TTL for EMAIL_VERIFY tokens, sourced from AUTH_TOKEN_TTL_HOURS
+   * (default 24 hours — contract 001, never hardcoded).
+   */
+  private getEmailVerifyTtlHours(): number {
+    const raw = this.configService.get<string | number>('AUTH_TOKEN_TTL_HOURS');
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 24;
+  }
+
+  /**
    * Issues a single-use PASSWORD_RESET AuthToken when the email belongs to an
    * active user. Anti-enumeration: the response and the amount of work are
    * identical whether or not the email exists — the unknown-email branch pays
@@ -412,5 +422,64 @@ export class AuthService {
       newPasswordHash,
       userId: authToken.userId,
     });
+  }
+
+  /**
+   * Consumes an EMAIL_VERIFY token: marks it used and fills
+   * users.emailVerifiedAt. Invalid, expired, and used tokens collapse into
+   * one identical error. A verified email is never reset by token traffic.
+   */
+  async verifyEmail(token: string): Promise<void> {
+    const tokenHash = sha256Hex(token);
+    const authToken =
+      await this.authTokensRepository.findValidEmailVerifyToken(tokenHash);
+
+    if (!authToken) {
+      throw new BadRequestException('Token is invalid or expired');
+    }
+
+    await this.authTokensRepository.consumeEmailVerifyToken({
+      tokenId: authToken.id,
+      userId: authToken.userId,
+    });
+  }
+
+  /**
+   * Issues a fresh EMAIL_VERIFY AuthToken when the email belongs to an active
+   * user whose emailVerifiedAt is still null. Anti-enumeration: unknown,
+   * blocked, and already-verified emails pay the same dummy hash work and
+   * return the identical neutral response.
+   */
+  async resendVerification(email: string): Promise<void> {
+    const user = await this.usersRepository
+      .findByEmail(email)
+      .catch(() => null);
+
+    if (
+      !user ||
+      user.status !== $Enums.UserStatus.ACTIVE ||
+      user.emailVerifiedAt !== null
+    ) {
+      await hashPassword('timing-equalizer-not-a-real-password');
+      return;
+    }
+
+    const rawToken = generateOpaqueToken();
+    const tokenHash = sha256Hex(rawToken);
+    const expiresAt = new Date(
+      Date.now() + this.getEmailVerifyTtlHours() * 3_600_000,
+    );
+
+    await this.authTokensRepository.createEmailVerifyToken(
+      user.id,
+      tokenHash,
+      expiresAt,
+    );
+
+    // Structured debug log carries the hash only — the raw token never lands in logs.
+    // Slice 5 replaces this with the mail module call.
+    this.prisma['logger']?.['debug']?.(
+      `EMAIL_VERIFY token issued for user ${user.id} (hash ${tokenHash})`,
+    );
   }
 }

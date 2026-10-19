@@ -200,6 +200,56 @@
         ]
       }
     },
+    "/auth/verify-email": {
+      "post": {
+        "operationId": "AuthController_verifyEmail",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Verify the email with a single-use EMAIL_VERIFY token",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/resend-verification": {
+      "post": {
+        "operationId": "AuthController_resendVerification",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendVerificationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Resend a verification token (always 200 — anti account enumeration)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
     "/.well-known/jwks.json": {
       "get": {
         "operationId": "JwksController_jwks",
@@ -1192,6 +1242,32 @@
         "required": [
           "token",
           "password"
+        ]
+      },
+      "VerifyEmailDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "example": "Xk9f2mQ7pLz3R1vY8wN4aB6cD0eF5gH2",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "ResendVerificationDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "user@example.com",
+            "format": "email"
+          }
+        },
+        "required": [
+          "email"
         ]
       },
       "UpdateUserDto": {

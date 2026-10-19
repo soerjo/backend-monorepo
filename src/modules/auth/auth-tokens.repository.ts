@@ -27,6 +27,63 @@ export class AuthTokensRepository {
     });
   }
 
+  async createEmailVerifyToken(
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ) {
+    return this.prisma.authToken.create({
+      data: {
+        userId,
+        type: AuthTokenType.EMAIL_VERIFY,
+        tokenHash,
+        expiresAt,
+      },
+      select: { id: true },
+    });
+  }
+
+  /**
+   * Fetches a usable EMAIL_VERIFY token by hash. A token is usable only when
+   * it is unexpired and unused; invalid, expired, and used tokens are
+   * intentionally indistinguishable at this layer.
+   */
+  async findValidEmailVerifyToken(tokenHash: string) {
+    return this.prisma.authToken.findFirst({
+      where: {
+        type: AuthTokenType.EMAIL_VERIFY,
+        tokenHash,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+    });
+  }
+
+  /**
+   * Atomically consumes a valid EMAIL_VERIFY token: marks it used and fills
+   * users.emailVerifiedAt. The conditional update (emailVerifiedAt: null in
+   * the where clause) guarantees an already-verified email is never reset —
+   * even under a race, the verified truth stays untouched.
+   */
+  async consumeEmailVerifyToken(params: {
+    tokenId: string;
+    userId: string;
+  }): Promise<boolean> {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.authToken.update({
+        where: { id: params.tokenId },
+        data: { usedAt: new Date() },
+      });
+
+      const result = await tx.user.updateMany({
+        where: { id: params.userId, emailVerifiedAt: null },
+        data: { emailVerifiedAt: new Date() },
+      });
+
+      return result.count > 0;
+    });
+  }
+
   /**
    * Fetches a usable PASSWORD_RESET token by hash. A token is usable only
    * when it is unexpired and unused; invalid, expired, and used tokens are

@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import { MailSendResult, MailSender, MailTransportMode } from './mail.types.js';
@@ -54,6 +56,26 @@ export class NodemailerMailService implements MailSender {
     } else {
       this.transporter = null;
     }
+    this.mailLogFile = configService.get<string>('MAIL_LOG_FILE') ?? null;
+  }
+
+  private readonly mailLogFile: string | null;
+
+  /**
+   * Dev/test capture: when MAIL_LOG_FILE is set, append one JSON line per
+   * log-transport message. Write failures are captured (warned) — they never
+   * break delivery or the caller's response.
+   */
+  private appendMailLog(entry: Record<string, unknown>): void {
+    if (!this.mailLogFile) return;
+    try {
+      mkdirSync(dirname(this.mailLogFile), { recursive: true });
+      appendFileSync(this.mailLogFile, `${JSON.stringify(entry)}\n`);
+    } catch (error) {
+      this.logger.warn(
+        `MAIL_LOG_FILE write failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   async sendPasswordReset(
@@ -90,13 +112,16 @@ export class NodemailerMailService implements MailSender {
     try {
       if (this.mode === 'log' || !this.transporter) {
         // Dev transport: one structured log event carries the full message.
-        this.logger.log({
+        const entry = {
           event: 'mail.log-transport',
           transport: 'log',
           to,
           subject,
           link,
-        });
+          at: new Date().toISOString(),
+        };
+        this.logger.log(entry);
+        this.appendMailLog(entry);
         return { delivered: true, transport: 'log' };
       }
 

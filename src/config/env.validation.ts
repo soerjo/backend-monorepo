@@ -136,6 +136,12 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   APP_WEB_URL: string = 'http://localhost:5173';
+
+  // Optional: when set, log-transport messages are appended as one JSON line
+  // per message to this file (dev/test capture; production leaves it unset).
+  @IsString()
+  @IsOptional()
+  MAIL_LOG_FILE?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

@@ -74,6 +74,7 @@ model PaymentTransaction {
   snapToken             String?         @map("snap_token")
   snapRedirectUrl       String?         @map("snap_redirect_url")
   signatureKey          String?         @map("signature_key")
+  requestPayload        Json?           @map("request_payload")
   rawResponse           Json?           @map("raw_response")
   createdAt             DateTime        @default(now()) @map("created_at")
   updatedAt             DateTime        @updatedAt @map("updated_at")

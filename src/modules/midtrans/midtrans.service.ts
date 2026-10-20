@@ -22,6 +22,8 @@ export interface SnapTransactionParams {
 export interface SnapTransactionResponse {
   token: string;
   redirect_url: string;
+  requestPayload: Record<string, unknown>;
+  rawResponse: Record<string, unknown>;
 }
 
 @Injectable()
@@ -45,18 +47,6 @@ export class MidtransService {
   async createSnapTransaction(
     params: SnapTransactionParams,
   ): Promise<SnapTransactionResponse> {
-    if (!this.serverKey) {
-      this.logger.warn(
-        'MIDTRANS_SERVER_KEY is not set. Generating mock Snap token for local testing.',
-      );
-      return {
-        token: `mock-snap-token-${params.orderId}`,
-        redirect_url: `https://app.sandbox.midtrans.com/snap/v2/vtweb/mock-${params.orderId}`,
-      };
-    }
-
-    const authHeader = Buffer.from(`${this.serverKey}:`).toString('base64');
-
     const payload = {
       transaction_details: {
         order_id: params.orderId,
@@ -65,6 +55,20 @@ export class MidtransService {
       customer_details: params.customerDetails,
       item_details: params.itemDetails,
     };
+
+    if (!this.serverKey) {
+      this.logger.warn(
+        'MIDTRANS_SERVER_KEY is not set. Generating mock Snap token for local testing.',
+      );
+      return {
+        token: `mock-snap-token-${params.orderId}`,
+        redirect_url: `https://app.sandbox.midtrans.com/snap/v2/vtweb/mock-${params.orderId}`,
+        requestPayload: payload,
+        rawResponse: { mock: true, order_id: params.orderId },
+      };
+    }
+
+    const authHeader = Buffer.from(`${this.serverKey}:`).toString('base64');
 
     try {
       const response = await axios.post<SnapTransactionResponse>(
@@ -80,7 +84,11 @@ export class MidtransService {
         },
       );
 
-      return response.data;
+      return {
+        ...response.data,
+        requestPayload: payload,
+        rawResponse: response.data as unknown as Record<string, unknown>,
+      };
     } catch (err: unknown) {
       const errorMsg =
         (err as { response?: { data?: unknown } })?.response?.data ||

@@ -103,6 +103,8 @@ export class InvoicesService {
       channel: dto.channel || PaymentChannel.SNAP_ALL,
       snapToken: snapResult.token,
       snapRedirectUrl: snapResult.redirect_url,
+      requestPayload: snapResult.requestPayload as unknown as Prisma.InputJsonValue,
+      rawResponse: snapResult.rawResponse as unknown as Prisma.InputJsonValue,
       status: 'PENDING',
     });
 
@@ -157,6 +159,8 @@ export class InvoicesService {
       channel: PaymentChannel.QRIS,
       snapToken: snapResult.token,
       snapRedirectUrl: snapResult.redirect_url,
+      requestPayload: snapResult.requestPayload as unknown as Prisma.InputJsonValue,
+      rawResponse: snapResult.rawResponse as unknown as Prisma.InputJsonValue,
       status: 'PENDING',
     });
 

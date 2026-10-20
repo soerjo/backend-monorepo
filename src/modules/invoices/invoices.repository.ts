@@ -85,6 +85,8 @@ export class InvoicesRepository {
     snapToken?: string;
     snapRedirectUrl?: string;
     status?: string;
+    requestPayload?: Prisma.InputJsonValue;
+    rawResponse?: Prisma.InputJsonValue;
   }) {
     return this.prisma.paymentTransaction.create({
       data: {
@@ -96,6 +98,8 @@ export class InvoicesRepository {
         snapToken: data.snapToken,
         snapRedirectUrl: data.snapRedirectUrl,
         status: data.status || 'PENDING',
+        requestPayload: data.requestPayload,
+        rawResponse: data.rawResponse,
       },
     });
   }

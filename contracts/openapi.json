@@ -1,0 +1,361 @@
+{
+  "components": {
+    "schemas": {
+      "CheckoutInvoiceDto": {
+        "properties": {
+          "channel": {
+            "default": "SNAP_ALL",
+            "description": "Preferred Midtrans payment channel",
+            "enum": [
+              "SNAP_ALL",
+              "QRIS",
+              "GOPAY",
+              "BANK_TRANSFER",
+              "CREDIT_CARD"
+            ],
+            "example": "SNAP_ALL",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateInvoiceDto": {
+        "properties": {
+          "amount": {
+            "description": "Invoice gross amount in IDR",
+            "example": 150000,
+            "type": "number"
+          },
+          "description": {
+            "description": "Human readable invoice description",
+            "example": "Subscription Plan Renewal",
+            "type": "string"
+          },
+          "dueDate": {
+            "description": "Due date in ISO-8601 format",
+            "example": "2026-10-30T23:59:59.000Z",
+            "type": "string"
+          },
+          "metadata": {
+            "description": "Arbitrary context metadata JSON",
+            "example": {
+              "orderId": "ord-123",
+              "source": "pos"
+            },
+            "type": "object"
+          },
+          "organizationId": {
+            "description": "Target UMS Organization ID",
+            "example": "123e4567-e89b-12d3-a456-426614174000",
+            "type": "string"
+          }
+        },
+        "required": [
+          "organizationId",
+          "amount",
+          "dueDate"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "contact": {},
+    "description": "Centralized Billing Service & Midtrans Integration API documentation",
+    "title": "Billing API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "additionalProperties": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "error": {
+                      "additionalProperties": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "example": {},
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "info": {
+                      "additionalProperties": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "status": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The Health Check is successful"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "additionalProperties": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        },
+                        "redis": {
+                          "message": "Could not connect",
+                          "status": "down"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "error": {
+                      "additionalProperties": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "example": {
+                        "redis": {
+                          "message": "Could not connect",
+                          "status": "down"
+                        }
+                      },
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "info": {
+                      "additionalProperties": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "status": {
+                      "example": "error",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The Health Check is not successful"
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/api/v1/invoices": {
+      "post": {
+        "operationId": "InvoicesController_createInvoice",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvoiceDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new invoice for an organization",
+        "tags": [
+          "Invoices"
+        ]
+      }
+    },
+    "/api/v1/invoices/{id}": {
+      "get": {
+        "operationId": "InvoicesController_getInvoiceById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get invoice details by ID with transactions",
+        "tags": [
+          "Invoices"
+        ]
+      }
+    },
+    "/api/v1/invoices/{id}/checkout": {
+      "post": {
+        "operationId": "InvoicesController_checkoutInvoice",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutInvoiceDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Initiate Midtrans Snap checkout for an invoice",
+        "tags": [
+          "Invoices"
+        ]
+      }
+    },
+    "/api/v1/webhooks/midtrans": {
+      "post": {
+        "operationId": "WebhooksController_handleMidtransWebhook",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Public webhook receiver for Midtrans payment notifications with SHA512 signature check",
+        "tags": [
+          "Webhooks"
+        ]
+      }
+    }
+  },
+  "servers": [],
+  "tags": []
+}

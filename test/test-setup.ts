@@ -3,19 +3,15 @@ import { config } from 'dotenv';
 config({ path: '.env' });
 
 process.env.NODE_ENV = 'test';
-process.env.JWT_SECRET_KEY = 'test-jwt-secret';
-process.env.JWT_EXPIRATION_TIME = '1h';
-process.env.JWT_REFRESH_SECRET_KEY = 'test-refresh-secret';
-process.env.JWT_REFRESH_EXPIRATION_TIME = '7d';
-process.env.TEMP_PASSWORD = 'test-temp-password';
-process.env.DATABASE_HOST = 'localhost';
-process.env.DATABASE_PORT = '5432';
-process.env.DATABASE_USERNAME = 'postgres';
-process.env.DATABASE_PASSWORD = 'postgres';
-process.env.DATABASE_NAME = 'test';
-process.env.REDIS_HOST = 'localhost';
-process.env.REDIS_PORT = '6379';
-process.env.REDIS_PASSWORD = '';
-process.env.REDIS_DB = '0';
+process.env.DATABASE_URL =
+  process.env.DATABASE_URL ||
+  'postgresql://user:pass@localhost:5432/billing_db';
+process.env.UMS_JWT_PUBLIC_KEY =
+  process.env.UMS_JWT_PUBLIC_KEY ||
+  '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0Y8+test\n-----END PUBLIC KEY-----';
+process.env.MIDTRANS_SERVER_KEY =
+  process.env.MIDTRANS_SERVER_KEY || 'SB-Mid-server-testkey12345';
+process.env.MIDTRANS_CLIENT_KEY =
+  process.env.MIDTRANS_CLIENT_KEY || 'SB-Mid-client-testkey12345';
 process.env.THROTTLE_TTL = '60';
 process.env.THROTTLE_LIMIT = '100';

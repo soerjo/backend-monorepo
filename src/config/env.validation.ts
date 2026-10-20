@@ -1,5 +1,6 @@
 import { plainToInstance } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -20,44 +21,42 @@ class EnvironmentVariables {
 
   @IsPort()
   @IsOptional()
-  PORT: string = '3000';
+  PORT: string = '3504';
 
   @IsString()
   @IsNotEmpty()
   DATABASE_URL!: string;
 
+  // UMS Stateless RS256 JWT Verification
   @IsString()
-  @IsNotEmpty()
-  JWT_ACCESS_SECRET!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  JWT_REFRESH_SECRET!: string;
+  @IsOptional()
+  UMS_JWT_PUBLIC_KEY?: string;
 
   @IsString()
   @IsOptional()
-  JWT_ACCESS_EXPIRATION: string = '15m';
+  UMS_JWT_PUBLIC_KEY_PATH?: string;
+
+  // Midtrans Payment Gateway
+  @IsString()
+  @IsOptional()
+  MIDTRANS_SERVER_KEY?: string;
 
   @IsString()
   @IsOptional()
-  JWT_REFRESH_EXPIRATION: string = '7d';
+  MIDTRANS_CLIENT_KEY?: string;
 
-  @IsString()
-  @IsNotEmpty()
-  GOOGLE_CLIENT_ID!: string;
+  @IsBoolean()
+  @IsOptional()
+  MIDTRANS_IS_PRODUCTION: boolean = false;
 
+  // Kafka Event Broker
   @IsString()
-  @IsNotEmpty()
-  GOOGLE_CLIENT_SECRET!: string;
+  @IsOptional()
+  KAFKA_BROKERS: string = 'kafka:29092';
 
   @IsString()
   @IsOptional()
-  GOOGLE_CALLBACK_URL: string =
-    'http://localhost:3000/api/auth/google/callback';
-
-  @IsString()
-  @IsOptional()
-  FRONTEND_URL: string = 'http://localhost:5173';
+  KAFKA_CLIENT_ID: string = 'billing-service';
 
   @IsString()
   @IsOptional()

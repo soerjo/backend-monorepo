@@ -7,39 +7,103 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum RoleName {
-  SYSTEM
-  ADMIN
-  USER
+enum InvoiceStatus {
+  DRAFT
+  UNPAID
+  PAID
+  VOID
+  EXPIRED
 }
 
-model User {
-  id                    String   @id @default(uuid())
-  email                 String   @unique
-  password              String
-  firstName             String?
-  lastName              String?
-  isActive              Boolean  @default(true)
-  forgotPasswordRequest Boolean  @default(false)
-  role                  RoleName @default(USER)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  organizationId        String
-
-  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@map("users")
+enum PaymentProvider {
+  MIDTRANS
+  MANUAL
 }
 
-model Organization {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String   @unique
-  logoUrl     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+enum PaymentChannel {
+  SNAP_ALL
+  QRIS
+  GOPAY
+  BANK_TRANSFER
+  CREDIT_CARD
+}
 
-  users       User[]
+model BillingAccount {
+  id             String    @id @default(uuid())
+  organizationId String    @unique @map("organization_id") // Ref UMS Organization
+  name           String
+  email          String
+  phone          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  invoices       Invoice[]
 
-  @@map("organizations")
+  @@map("billing_accounts")
+}
+
+model Invoice {
+  id               String               @id @default(uuid())
+  billingAccountId String               @map("billing_account_id")
+  billingAccount   BillingAccount       @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+  invoiceNumber    String               @unique @map("invoice_number") // Format: INV-YYYYMMDD-XXXX
+  amount           Decimal              @db.Decimal(12, 2)
+  currency         String               @default("IDR")
+  status           InvoiceStatus        @default(UNPAID)
+  dueDate          DateTime             @map("due_date")
+  description      String?
+  paidAt           DateTime?            @map("paid_at")
+  metadata         Json?
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+  transactions     PaymentTransaction[]
+
+  @@index([billingAccountId, status])
+  @@map("invoices")
+}
+
+model PaymentTransaction {
+  id                    String          @id @default(uuid())
+  invoiceId             String          @map("invoice_id")
+  invoice               Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  provider              PaymentProvider @default(MIDTRANS)
+  channel               PaymentChannel  @default(SNAP_ALL)
+  grossAmount           Decimal         @map("gross_amount") @db.Decimal(12, 2)
+  status                String          // PENDING, SETTLEMENT, EXPIRE, CANCEL, DENY
+  midtransOrderId       String          @unique @map("midtrans_order_id")
+  midtransTransactionId String?         @map("midtrans_transaction_id")
+  snapToken             String?         @map("snap_token")
+  snapRedirectUrl       String?         @map("snap_redirect_url")
+  signatureKey          String?         @map("signature_key")
+  rawResponse           Json?           @map("raw_response")
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  @@index([invoiceId, status])
+  @@map("payment_transactions")
+}
+
+model WebhookEvent {
+  id            String   @id @default(uuid())
+  provider      String   @default("MIDTRANS")
+  eventId       String   @unique @map("event_id") // transaction_id
+  orderId       String   @map("order_id")
+  signatureKey  String   @map("signature_key")
+  payload       Json
+  processedAt   DateTime @default(now()) @map("processed_at")
+
+  @@map("webhook_events")
+}
+
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  aggregateType String    @map("aggregate_type") // INVOICE
+  aggregateId   String    @map("aggregate_id")   // invoiceId
+  eventType     String    @map("event_type")     // INVOICE_PAID, INVOICE_EXPIRED
+  payload       Json
+  status        String    @default("PENDING")    // PENDING, PROCESSED, FAILED
+  createdAt     DateTime  @default(now()) @map("created_at")
+  processedAt   DateTime? @map("processed_at")
+
+  @@index([status, createdAt])
+  @@map("outbox_events")
 }

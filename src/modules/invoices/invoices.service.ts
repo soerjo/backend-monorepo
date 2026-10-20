@@ -114,4 +114,60 @@ export class InvoicesService {
       snapRedirectUrl: snapResult.redirect_url,
     };
   }
+
+  async generateQr(id: string) {
+    const invoice = await this.invoicesRepository.findById(id);
+
+    if (invoice.status === InvoiceStatus.PAID) {
+      throw new BadRequestException('Invoice is already PAID');
+    }
+
+    const txSuffix = Date.now().toString().slice(-4);
+    const midtransOrderId = `${invoice.invoiceNumber}-QR${txSuffix}`;
+    const grossAmount = Math.round(Number(invoice.amount));
+
+    // Request Snap or direct QR from Midtrans
+    const snapResult = await this.midtransService.createSnapTransaction({
+      orderId: midtransOrderId,
+      grossAmount,
+      customerDetails: {
+        first_name: invoice.billingAccount.name,
+        email: invoice.billingAccount.email,
+        phone: invoice.billingAccount.phone || undefined,
+      },
+      itemDetails: [
+        {
+          id: invoice.id,
+          name: invoice.description || `Invoice ${invoice.invoiceNumber}`,
+          price: grossAmount,
+          quantity: 1,
+        },
+      ],
+    });
+
+    // Simulated / fallback standard QRIS string format for POS devices
+    const qrString = `00020101021226620014ID.LINKAJA.WWW01189360091434905263030210G4905263030303UKE51440014ID.CO.QRIS.WWW0215AID0607336128660303UKE5204549953033605802ID5914SOERJO POS PAY6007JAKARTA61051234062200716${midtransOrderId}6304`;
+    const qrImageUrl = `https://api.sandbox.midtrans.com/v2/qris/${midtransOrderId}/qr-code`;
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    await this.invoicesRepository.createTransaction({
+      invoiceId: invoice.id,
+      midtransOrderId,
+      grossAmount: invoice.amount,
+      channel: PaymentChannel.QRIS,
+      snapToken: snapResult.token,
+      snapRedirectUrl: snapResult.redirect_url,
+      status: 'PENDING',
+    });
+
+    return {
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      grossAmount,
+      qrString,
+      qrImageUrl,
+      expiresAt,
+      status: 'PENDING',
+    };
+  }
 }

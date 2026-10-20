@@ -40,4 +40,11 @@ export class InvoicesController {
   ) {
     return this.invoicesService.checkoutInvoice(id, dto);
   }
+
+  @Post(':id/qr')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Generate dynamic QRIS code for invoice payment' })
+  async generateQr(@Param('id') id: string) {
+    return this.invoicesService.generateQr(id);
+  }
 }

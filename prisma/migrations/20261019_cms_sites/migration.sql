@@ -22,6 +22,8 @@ CREATE TABLE "sites" (
     CONSTRAINT "sites_pkey" PRIMARY KEY ("id")
 );
 
+CREATE UNIQUE INDEX "sites_key_key" ON "sites"("key");
+
 -- Insert Default Site for legacy data migration
 INSERT INTO "sites" ("id", "key", "name", "status", "defaultLocale", "timezone", "updatedAt")
 VALUES ('default-site-id', 'default', 'Default Site', 'ACTIVE', 'id', 'Asia/Jakarta', CURRENT_TIMESTAMP)
@@ -142,7 +144,6 @@ ALTER TABLE "media_assets" ADD COLUMN IF NOT EXISTS "siteId" TEXT NOT NULL DEFAU
 ALTER TABLE "media_assets" ADD COLUMN IF NOT EXISTS "focalPoint" JSONB;
 
 -- CreateIndex
-CREATE UNIQUE INDEX "sites_key_key" ON "sites"("key");
 CREATE UNIQUE INDEX "sites_domain_key" ON "sites"("domain");
 CREATE UNIQUE INDEX "site_settings_siteId_key_key" ON "site_settings"("siteId", "key");
 CREATE INDEX "site_members_userId_idx" ON "site_members"("userId");

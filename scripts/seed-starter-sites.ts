@@ -1,6 +1,23 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../src/app.module.js';
-import { SitesService } from '../src/modules/sites/sites.service.js';
+
+async function importFromDistOrSrc<T>(
+  distPath: string,
+  srcPath: string,
+): Promise<T> {
+  try {
+    return (await import(distPath)) as T;
+  } catch {
+    return (await import(srcPath)) as T;
+  }
+}
+
+const { AppModule } = await importFromDistOrSrc<
+  typeof import('../src/app.module.js')
+>('../dist/app.module.js', '../src/app.module.js');
+
+const { SitesService } = await importFromDistOrSrc<
+  typeof import('../src/modules/sites/sites.service.js')
+>('../dist/modules/sites/sites.service.js', '../src/modules/sites/sites.service.js');
 
 interface SeedSiteDef {
   key: string;

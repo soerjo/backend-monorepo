@@ -764,7 +764,9 @@
             "name": "formKey",
             "required": false,
             "in": "query",
+            "description": "Filter submissions by form key (e.g. contact-form)",
             "schema": {
+              "example": "contact-form",
               "type": "string"
             }
           },
@@ -772,6 +774,7 @@
             "name": "status",
             "required": false,
             "in": "query",
+            "description": "Filter submissions by processing status",
             "schema": {
               "type": "string",
               "enum": [
@@ -786,7 +789,10 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (1-based)",
             "schema": {
+              "minimum": 1,
+              "default": 1,
               "type": "number"
             }
           },
@@ -794,7 +800,11 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Submissions per page",
             "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
               "type": "number"
             }
           }
@@ -870,7 +880,9 @@
             "name": "contentTypeId",
             "required": false,
             "in": "query",
+            "description": "Filter by content type UUID",
             "schema": {
+              "example": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
               "type": "string"
             }
           },
@@ -878,6 +890,7 @@
             "name": "status",
             "required": false,
             "in": "query",
+            "description": "Filter by content entry publication status",
             "schema": {
               "type": "string",
               "enum": [
@@ -893,7 +906,9 @@
             "name": "locale",
             "required": false,
             "in": "query",
+            "description": "Filter by locale code (e.g. id, en)",
             "schema": {
+              "example": "id",
               "type": "string"
             }
           },
@@ -901,7 +916,10 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (1-based)",
             "schema": {
+              "minimum": 1,
+              "default": 1,
               "type": "number"
             }
           },
@@ -909,7 +927,11 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page",
             "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
               "type": "number"
             }
           }
@@ -1107,7 +1129,9 @@
             "name": "contentTypeId",
             "required": false,
             "in": "query",
+            "description": "Filter by content type UUID",
             "schema": {
+              "example": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
               "type": "string"
             }
           },
@@ -1115,6 +1139,7 @@
             "name": "status",
             "required": false,
             "in": "query",
+            "description": "Filter by content entry publication status",
             "schema": {
               "type": "string",
               "enum": [
@@ -1130,7 +1155,9 @@
             "name": "locale",
             "required": false,
             "in": "query",
+            "description": "Filter by locale code (e.g. id, en)",
             "schema": {
+              "example": "id",
               "type": "string"
             }
           },
@@ -1138,7 +1165,10 @@
             "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (1-based)",
             "schema": {
+              "minimum": 1,
+              "default": 1,
               "type": "number"
             }
           },
@@ -1146,7 +1176,11 @@
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Items per page",
             "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
               "type": "number"
             }
           }
@@ -2673,18 +2707,25 @@
         "parameters": [
           {
             "name": "page",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "Page number (1-based)",
             "schema": {
-              "type": "string"
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
             }
           },
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "Items per page",
             "schema": {
-              "type": "string"
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
             }
           }
         ],

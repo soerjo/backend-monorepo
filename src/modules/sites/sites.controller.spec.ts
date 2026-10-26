@@ -117,22 +117,26 @@ describe('SitesController', () => {
       items: [],
       meta: {},
     });
-    await controller.findSiteSubmissions('resto-enak');
+    await controller.findSiteSubmissions('resto-enak', {});
     expect(mockSitesService.findSiteSubmissions).toHaveBeenCalledWith(
       'resto-enak',
-      expect.any(Object),
+      {},
     );
 
     mockSitesService.updateSubmissionStatus.mockResolvedValue({
-      id: 'sub-1',
+      id: '11111111-1111-1111-1111-111111111111',
       status: 'PROCESSED',
     });
-    await controller.updateSubmissionStatus('resto-enak', 'sub-1', {
-      status: 'PROCESSED',
-    });
+    await controller.updateSubmissionStatus(
+      'resto-enak',
+      '11111111-1111-1111-1111-111111111111',
+      {
+        status: 'PROCESSED',
+      },
+    );
     expect(mockSitesService.updateSubmissionStatus).toHaveBeenCalledWith(
       'resto-enak',
-      'sub-1',
+      '11111111-1111-1111-1111-111111111111',
       'PROCESSED',
     );
   });

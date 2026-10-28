@@ -7,7 +7,7 @@ import tseslint from 'typescript-eslint';
 /** @type {import('typescript-eslint').ConfigWithExtends[]} */
 export const baseEslintConfig = [
   {
-    ignores: ['eslint.config.mjs', 'dist/**', 'coverage/**', 'node_modules/**'],
+    ignores: ['eslint.config.mjs', 'dist/**', 'coverage/**', 'node_modules/**', 'src/generated/**', '**/src/generated/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

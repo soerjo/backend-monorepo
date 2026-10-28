@@ -9,7 +9,7 @@ Centralized monorepo for the microservices ecosystem, powered by **Bun Workspace
 | Service | Port | Description | Database | Key Technologies |
 | :--- | :--- | :--- | :--- | :--- |
 | [`ums-service`](apps/ums-service) | `3001` | Central Identity Provider, JWT RS256, JWKS, RBAC, Sessions | `ums_db` | NestJS 11, Prisma 6, RS256, Winston, Prom |
-| [`my-cms-service`](apps/my-cms-service) | `3002` | Headless CMS (Pages, Content Types, Versions, Media) | `cms_db` | NestJS 11, Prisma 6, UMS JWKS Client |
+| [`cms-service`](apps/cms-service) | `3002` | Headless CMS (Pages, Content Types, Versions, Media) | `cms_db` | NestJS 11, Prisma 6, UMS JWKS Client |
 | [`pos-service`](apps/pos-service) | `3003` | Point of Sale Core (Orders, Shifts, Outbox Kafka) | `pos_db` | NestJS 11, Prisma 6, KafkaJS, Outbox |
 | [`wms-service`](apps/wms-service) | `3004` | Warehouse Management System & Stock Ledger | `wms_db` | NestJS 11, Prisma 6, POS Kafka Consumer |
 | [`billing-service`](apps/billing-service) | `3005` | Payment Gateway (Midtrans), Webhooks, Idempotency | `billing_db` | NestJS 11, Prisma 6, Midtrans, Redis, Outbox |
@@ -24,7 +24,7 @@ Centralized monorepo for the microservices ecosystem, powered by **Bun Workspace
 backend-monorepo/
 ├── apps/
 │   ├── ums-service/              # Central Auth & Identity Provider (Port 3001)
-│   ├── my-cms-service/           # Headless CMS (Port 3002)
+│   ├── cms-service/              # Headless CMS (Port 3002)
 │   ├── pos-service/              # Point of Sale Core (Port 3003)
 │   ├── wms-service/              # Warehouse Management (Port 3004)
 │   ├── billing-service/          # Billing & Midtrans Gateway (Port 3005)

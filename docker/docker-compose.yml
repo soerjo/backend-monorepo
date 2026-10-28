@@ -44,6 +44,22 @@ services:
       - monorepo-net
 
   # -------------------------------------------------------------
+  # Redis Dashboard: RedisInsight
+  # -------------------------------------------------------------
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: monorepo-redisinsight
+    restart: unless-stopped
+    depends_on:
+      - redis
+    ports:
+      - "${REDISINSIGHT_PORT:-5540}:5540"
+    volumes:
+      - redisinsight_data:/data
+    networks:
+      - monorepo-net
+
+  # -------------------------------------------------------------
   # Event Streaming: Zookeeper & Apache Kafka
   # -------------------------------------------------------------
   zookeeper:
@@ -134,7 +150,7 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
-
+  redisinsight_data:
 networks:
   monorepo-net:
     driver: bridge

@@ -31,6 +31,8 @@ import type { RegisterDto } from './dto/register.dto.js';
 import { AuditService } from '../audit/audit.service.js';
 import { SecurityPoliciesService } from '../security-policies/security-policies.service.js';
 import { OutboxService } from '../outbox/outbox.service.js';
+import { PasswordPolicyService } from './password-policy.service.js';
+import { AccountLockoutService } from './account-lockout.service.js';
 import { UMS_TOPICS } from '@workspace/events';
 
 export interface RequestMeta {
@@ -67,6 +69,8 @@ export class AuthService {
     private readonly webhookDispatcherService: WebhookDispatcherService,
     private readonly securityPoliciesService: SecurityPoliciesService,
     private readonly outboxService: OutboxService,
+    private readonly passwordPolicyService: PasswordPolicyService,
+    private readonly accountLockoutService: AccountLockoutService,
   ) {}
 
   public get accessTokenTtlSeconds(): number {
@@ -220,15 +224,21 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<AuthUser | null> {
+    await this.accountLockoutService.checkLockout(email);
+
     const user = await this.usersRepository.findByEmail(email);
     if (!user || user.status !== $Enums.UserStatus.ACTIVE) {
+      await this.accountLockoutService.recordFailedAttempt(email);
       return null;
     }
 
     const passwordMatches = await verifyPassword(user.passwordHash, password);
     if (!passwordMatches) {
+      await this.accountLockoutService.recordFailedAttempt(email);
       return null;
     }
+
+    await this.accountLockoutService.resetAttempts(email);
 
     const authUser = await this.toAuthUser(user);
     const policies = await this.securityPoliciesService.getPolicies();
@@ -261,6 +271,8 @@ export class AuthService {
     if (existingUser) {
       throw new BadRequestException('Email already in use');
     }
+
+    this.passwordPolicyService.validatePasswordStrength(dto.password);
 
     const passwordHash = await hashPassword(dto.password);
 
@@ -584,6 +596,12 @@ export class AuthService {
       throw new BadRequestException('Token is invalid or expired');
     }
 
+    this.passwordPolicyService.validatePasswordStrength(newPassword);
+    await this.passwordPolicyService.checkPasswordHistory(
+      authToken.userId,
+      newPassword,
+    );
+
     const newPasswordHash = await hashPassword(newPassword);
 
     await this.authTokensRepository.consumePasswordResetToken({
@@ -591,6 +609,11 @@ export class AuthService {
       newPasswordHash,
       userId: authToken.userId,
     });
+
+    await this.passwordPolicyService.recordPasswordHistory(
+      authToken.userId,
+      newPasswordHash,
+    );
 
     await this.auditService.log({
       action: 'auth.password_reset_completed',

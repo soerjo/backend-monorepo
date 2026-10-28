@@ -13,6 +13,8 @@ import { JWT_AZP, JWT_ISSUER } from './auth.constants.js';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import { SecurityPoliciesService } from '../security-policies/security-policies.service.js';
 import { OutboxService } from '../outbox/outbox.service.js';
+import { PasswordPolicyService } from './password-policy.service.js';
+import { AccountLockoutService } from './account-lockout.service.js';
 
 interface DecodedHeader {
   alg: string;
@@ -85,6 +87,16 @@ describe('RS256 access token signing (UMS contract)', () => {
       } as unknown as WebhookDispatcherService,
       mockSecurityPoliciesService as unknown as SecurityPoliciesService,
       { emit: jest.fn().mockResolvedValue({}) } as unknown as OutboxService,
+      {
+        validatePasswordStrength: jest.fn(),
+        checkPasswordHistory: jest.fn().mockResolvedValue(undefined),
+        recordPasswordHistory: jest.fn().mockResolvedValue(undefined),
+      } as unknown as PasswordPolicyService,
+      {
+        checkLockout: jest.fn().mockResolvedValue(undefined),
+        recordFailedAttempt: jest.fn().mockResolvedValue(undefined),
+        resetAttempts: jest.fn().mockResolvedValue(undefined),
+      } as unknown as AccountLockoutService,
     );
   });
 

@@ -1,0 +1,3420 @@
+{
+  "components": {
+    "schemas": {
+      "CreateCategoryDto": {
+        "properties": {
+          "key": {
+            "example": "tech",
+            "type": "string"
+          },
+          "name": {
+            "example": "Technology",
+            "type": "string"
+          },
+          "parentId": {
+            "example": "parent-category-uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "type": "object"
+      },
+      "CreateContentEntryDto": {
+        "properties": {
+          "contentTypeId": {
+            "example": "content-type-uuid-or-key",
+            "type": "string"
+          },
+          "data": {
+            "example": {
+              "body": "Hello world",
+              "title": "My Article"
+            },
+            "type": "object"
+          },
+          "locale": {
+            "example": "id",
+            "type": "string"
+          },
+          "slug": {
+            "example": "my-article-slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "contentTypeId",
+          "slug",
+          "data"
+        ],
+        "type": "object"
+      },
+      "CreateContentTypeDto": {
+        "properties": {
+          "description": {
+            "example": "Blog article content type",
+            "type": "string"
+          },
+          "fields": {
+            "example": [
+              {
+                "key": "title",
+                "type": "text",
+                "label": "Title",
+                "required": true
+              }
+            ],
+            "items": {
+              "$ref": "#/components/schemas/FieldDefinitionDto"
+            },
+            "type": "array"
+          },
+          "isSingleton": {
+            "example": false,
+            "type": "boolean"
+          },
+          "key": {
+            "example": "article",
+            "type": "string"
+          },
+          "name": {
+            "example": "Article",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "CreateSiteDto": {
+        "properties": {
+          "defaultLocale": {
+            "default": "id",
+            "example": "id",
+            "type": "string"
+          },
+          "domain": {
+            "example": "kopikenangan.id",
+            "type": "string"
+          },
+          "key": {
+            "description": "URL-friendly slug for /s/{key}",
+            "example": "kopi-kenangan",
+            "type": "string"
+          },
+          "name": {
+            "example": "Kopi Kenangan Senopati",
+            "type": "string"
+          },
+          "templateKey": {
+            "description": "Optional starter template key (resto-web-profile | toko-retail-profile | jasa-service-profile)",
+            "example": "resto-web-profile",
+            "type": "string"
+          },
+          "timezone": {
+            "default": "Asia/Jakarta",
+            "example": "Asia/Jakarta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "key"
+        ],
+        "type": "object"
+      },
+      "CreateTagDto": {
+        "properties": {
+          "key": {
+            "example": "nestjs",
+            "type": "string"
+          },
+          "name": {
+            "example": "NestJS",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "type": "object"
+      },
+      "FieldDefinitionDto": {
+        "properties": {
+          "key": {
+            "example": "title",
+            "type": "string"
+          },
+          "label": {
+            "example": "Title",
+            "type": "string"
+          },
+          "options": {
+            "example": [
+              "opt1",
+              "opt2"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "required": {
+            "example": true,
+            "type": "boolean"
+          },
+          "type": {
+            "enum": [
+              "text",
+              "rich_text",
+              "number",
+              "boolean",
+              "date",
+              "media",
+              "reference",
+              "select",
+              "multi_select"
+            ],
+            "example": "text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "type",
+          "required"
+        ],
+        "type": "object"
+      },
+      "PublishScheduleDto": {
+        "properties": {
+          "scheduledAt": {
+            "description": "Optional ISO8601 timestamp. When in the future, the entry is SCHEDULED and auto-published by the scheduler when due.",
+            "example": "2026-05-01T09:00:00.000Z",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateCategoryDto": {
+        "properties": {
+          "key": {
+            "example": "tech",
+            "type": "string"
+          },
+          "name": {
+            "example": "Technology",
+            "type": "string"
+          },
+          "parentId": {
+            "example": "parent-category-uuid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateContentEntryDto": {
+        "properties": {
+          "contentTypeId": {
+            "example": "content-type-uuid-or-key",
+            "type": "string"
+          },
+          "data": {
+            "example": {
+              "body": "Hello world",
+              "title": "My Article"
+            },
+            "type": "object"
+          },
+          "locale": {
+            "example": "id",
+            "type": "string"
+          },
+          "slug": {
+            "example": "my-article-slug",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateContentTypeDto": {
+        "properties": {
+          "description": {
+            "example": "Blog article content type",
+            "type": "string"
+          },
+          "fields": {
+            "example": [
+              {
+                "key": "title",
+                "type": "text",
+                "label": "Title",
+                "required": true
+              }
+            ],
+            "items": {
+              "$ref": "#/components/schemas/FieldDefinitionDto"
+            },
+            "type": "array"
+          },
+          "isSingleton": {
+            "example": false,
+            "type": "boolean"
+          },
+          "key": {
+            "example": "article",
+            "type": "string"
+          },
+          "name": {
+            "example": "Article",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateSiteDto": {
+        "properties": {
+          "defaultLocale": {
+            "example": "en",
+            "type": "string"
+          },
+          "domain": {
+            "example": "kopibaru.id",
+            "type": "string"
+          },
+          "name": {
+            "example": "Kopi Kenangan Baru",
+            "type": "string"
+          },
+          "status": {
+            "default": "ACTIVE",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED",
+              "TRIAL_EXPIRED"
+            ],
+            "type": "string"
+          },
+          "timezone": {
+            "example": "Asia/Makassar",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateSubmissionStatusDto": {
+        "properties": {
+          "status": {
+            "enum": [
+              "PENDING",
+              "PROCESSED",
+              "SPAM",
+              "ARCHIVED"
+            ],
+            "example": "PROCESSED",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "UpdateTagDto": {
+        "properties": {
+          "key": {
+            "example": "nestjs",
+            "type": "string"
+          },
+          "name": {
+            "example": "NestJS",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "contact": {},
+    "description": "My CMS Service API documentation",
+    "title": "CMS API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/categories": {
+      "get": {
+        "operationId": "CategoriesController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List categories",
+        "tags": [
+          "Categories"
+        ]
+      },
+      "post": {
+        "operationId": "CategoriesController_create",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCategoryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create category",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/api/categories/{id}": {
+      "delete": {
+        "operationId": "CategoriesController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete category by ID",
+        "tags": [
+          "Categories"
+        ]
+      },
+      "get": {
+        "operationId": "CategoriesController_findById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get category by ID",
+        "tags": [
+          "Categories"
+        ]
+      },
+      "patch": {
+        "operationId": "CategoriesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCategoryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update category by ID",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/api/cms/sites": {
+      "get": {
+        "operationId": "SitesController_findAllSites",
+        "parameters": [
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ACTIVE",
+                "SUSPENDED",
+                "TRIAL_EXPIRED"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all CMS sites accessible to current user",
+        "tags": [
+          "sites"
+        ]
+      },
+      "post": {
+        "operationId": "SitesController_createSite",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSiteDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create new CMS site with optional starter template",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/cms/sites/{key}": {
+      "delete": {
+        "operationId": "SitesController_deleteSite",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Suspend / delete site",
+        "tags": [
+          "sites"
+        ]
+      },
+      "get": {
+        "operationId": "SitesController_findSiteByKey",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get site details by key",
+        "tags": [
+          "sites"
+        ]
+      },
+      "patch": {
+        "operationId": "SitesController_updateSite",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSiteDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update site details",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/cms/sites/{key}/media": {
+      "get": {
+        "operationId": "SitesController_findSiteMedia",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all media assets for a site",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/cms/sites/{key}/members": {
+      "get": {
+        "operationId": "SitesController_findSiteMembers",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all members for a site",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/cms/sites/{key}/pages": {
+      "get": {
+        "operationId": "SitesController_findSitePages",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all pages for a site",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/cms/sites/{key}/submissions": {
+      "get": {
+        "operationId": "SitesController_findSiteSubmissions",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "formKey",
+            "required": false,
+            "in": "query",
+            "description": "Filter submissions by form key (e.g. contact-form)",
+            "schema": {
+              "example": "contact-form",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter submissions by processing status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "PROCESSED",
+                "SPAM",
+                "ARCHIVED"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Submissions per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all form submissions for a site",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/cms/sites/{key}/submissions/{id}": {
+      "patch": {
+        "operationId": "SitesController_updateSubmissionStatus",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSubmissionStatusDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update form submission status",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/content": {
+      "get": {
+        "operationId": "ContentController_findAll[1]",
+        "parameters": [
+          {
+            "name": "contentTypeId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by content type UUID",
+            "schema": {
+              "example": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by content entry publication status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "PENDING_REVIEW",
+                "SCHEDULED",
+                "PUBLISHED",
+                "ARCHIVED"
+              ]
+            }
+          },
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "description": "Filter by locale code (e.g. id, en)",
+            "schema": {
+              "example": "id",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List content entries with optional filters",
+        "tags": [
+          "content"
+        ]
+      },
+      "post": {
+        "operationId": "ContentController_create[1]",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateContentEntryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new content entry (DRAFT)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content-types": {
+      "get": {
+        "operationId": "ContentTypesController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all content types",
+        "tags": [
+          "Content Types"
+        ]
+      },
+      "post": {
+        "operationId": "ContentTypesController_create",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateContentTypeDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new content type (Admin/Author)",
+        "tags": [
+          "Content Types"
+        ]
+      }
+    },
+    "/api/content-types/{id}": {
+      "delete": {
+        "operationId": "ContentTypesController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete content type by ID",
+        "tags": [
+          "Content Types"
+        ]
+      },
+      "get": {
+        "operationId": "ContentTypesController_findById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get content type by ID",
+        "tags": [
+          "Content Types"
+        ]
+      },
+      "patch": {
+        "operationId": "ContentTypesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateContentTypeDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update content type by ID",
+        "tags": [
+          "Content Types"
+        ]
+      }
+    },
+    "/api/content/entries": {
+      "get": {
+        "operationId": "ContentController_findAll[0]",
+        "parameters": [
+          {
+            "name": "contentTypeId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by content type UUID",
+            "schema": {
+              "example": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by content entry publication status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "PENDING_REVIEW",
+                "SCHEDULED",
+                "PUBLISHED",
+                "ARCHIVED"
+              ]
+            }
+          },
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "description": "Filter by locale code (e.g. id, en)",
+            "schema": {
+              "example": "id",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List content entries with optional filters",
+        "tags": [
+          "content"
+        ]
+      },
+      "post": {
+        "operationId": "ContentController_create[0]",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateContentEntryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new content entry (DRAFT)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/entries/{id}": {
+      "delete": {
+        "operationId": "ContentController_remove[0]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete content entry",
+        "tags": [
+          "content"
+        ]
+      },
+      "get": {
+        "operationId": "ContentController_findById[0]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get content entry by ID",
+        "tags": [
+          "content"
+        ]
+      },
+      "patch": {
+        "operationId": "ContentController_update[0]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateContentEntryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update content entry data (creates new version)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/entries/{id}/archive": {
+      "post": {
+        "operationId": "ContentController_archive[0]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive content entry",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/entries/{id}/publish": {
+      "post": {
+        "operationId": "ContentController_publish[0]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishScheduleDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Publish content entry (or schedule it when scheduledAt is in the future)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/entries/{id}/publish/cancel": {
+      "post": {
+        "operationId": "ContentController_cancelSchedule[0]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancel a scheduled publish (revert to DRAFT)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/entries/{id}/revert/{version}": {
+      "post": {
+        "operationId": "ContentController_restoreVersion[1]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Restore/revert a specific version as a new draft version",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/entries/{id}/revisions": {
+      "get": {
+        "operationId": "ContentController_getVersions[1]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all versions/revisions of a content entry",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/entries/{id}/revisions/{version}": {
+      "get": {
+        "operationId": "ContentController_getVersionByNumber[1]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get specific version/revision of a content entry",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/entries/{id}/unpublish": {
+      "post": {
+        "operationId": "ContentController_unpublish[0]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Unpublish content entry (revert to DRAFT)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/entries/{id}/versions": {
+      "get": {
+        "operationId": "ContentController_getVersions[0]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all versions/revisions of a content entry",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/entries/{id}/versions/{version}": {
+      "get": {
+        "operationId": "ContentController_getVersionByNumber[0]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get specific version/revision of a content entry",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/entries/{id}/versions/{version}/restore": {
+      "post": {
+        "operationId": "ContentController_restoreVersion[0]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Restore/revert a specific version as a new draft version",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/{id}": {
+      "delete": {
+        "operationId": "ContentController_remove[1]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete content entry",
+        "tags": [
+          "content"
+        ]
+      },
+      "get": {
+        "operationId": "ContentController_findById[1]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get content entry by ID",
+        "tags": [
+          "content"
+        ]
+      },
+      "patch": {
+        "operationId": "ContentController_update[1]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateContentEntryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update content entry data (creates new version)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/{id}/archive": {
+      "post": {
+        "operationId": "ContentController_archive[1]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive content entry",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/{id}/publish": {
+      "post": {
+        "operationId": "ContentController_publish[1]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishScheduleDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Publish content entry (or schedule it when scheduledAt is in the future)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/{id}/publish/cancel": {
+      "post": {
+        "operationId": "ContentController_cancelSchedule[1]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancel a scheduled publish (revert to DRAFT)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/{id}/revert/{version}": {
+      "post": {
+        "operationId": "ContentController_restoreVersion[3]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Restore/revert a specific version as a new draft version",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/{id}/revisions": {
+      "get": {
+        "operationId": "ContentController_getVersions[3]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all versions/revisions of a content entry",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/{id}/revisions/{version}": {
+      "get": {
+        "operationId": "ContentController_getVersionByNumber[3]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get specific version/revision of a content entry",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/{id}/unpublish": {
+      "post": {
+        "operationId": "ContentController_unpublish[1]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Unpublish content entry (revert to DRAFT)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/{id}/versions": {
+      "get": {
+        "operationId": "ContentController_getVersions[2]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all versions/revisions of a content entry",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/{id}/versions/{version}": {
+      "get": {
+        "operationId": "ContentController_getVersionByNumber[2]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get specific version/revision of a content entry",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/content/{id}/versions/{version}/restore": {
+      "post": {
+        "operationId": "ContentController_restoreVersion[2]",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Restore/revert a specific version as a new draft version",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/api/delivery/v1/categories": {
+      "get": {
+        "operationId": "DeliveryController_getCategories[0]",
+        "parameters": [
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List all categories for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/delivery/v1/content": {
+      "get": {
+        "operationId": "DeliveryController_getPublishedContent[0]",
+        "parameters": [
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contentType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "tag",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Public list of published content entries",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/delivery/v1/content/{slug}": {
+      "get": {
+        "operationId": "DeliveryController_getPublishedBySlug[0]",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contentType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get published content entry by slug",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/delivery/v1/forms/submit": {
+      "post": {
+        "operationId": "DeliveryController_submitForm[1]",
+        "parameters": [
+          {
+            "name": "formKey",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Arbitrary form submission payload",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Submit public form data for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/delivery/v1/forms/{formKey}/submissions": {
+      "post": {
+        "operationId": "DeliveryController_submitForm[0]",
+        "parameters": [
+          {
+            "name": "formKey",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Arbitrary form submission payload",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Submit public form data for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/delivery/v1/pages": {
+      "get": {
+        "operationId": "DeliveryController_getPublishedPages[0]",
+        "parameters": [
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List all published pages for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/delivery/v1/pages/{route}": {
+      "get": {
+        "operationId": "DeliveryController_getPublishedPageByRoute[0]",
+        "parameters": [
+          {
+            "name": "route",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get published page by route",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/delivery/v1/robots.txt": {
+      "get": {
+        "operationId": "DeliveryController_getRobots[0]",
+        "parameters": [
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Dynamic robots.txt for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/delivery/v1/sitemap.xml": {
+      "get": {
+        "operationId": "DeliveryController_getSitemap[0]",
+        "parameters": [
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Dynamic XML sitemap for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/delivery/v1/tags": {
+      "get": {
+        "operationId": "DeliveryController_getTags[0]",
+        "parameters": [
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List all tags for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "additionalProperties": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "error": {
+                      "additionalProperties": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "example": {},
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "info": {
+                      "additionalProperties": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "status": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The Health Check is successful"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "additionalProperties": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        },
+                        "redis": {
+                          "message": "Could not connect",
+                          "status": "down"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "error": {
+                      "additionalProperties": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "example": {
+                        "redis": {
+                          "message": "Could not connect",
+                          "status": "down"
+                        }
+                      },
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "info": {
+                      "additionalProperties": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "status": {
+                      "example": "error",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The Health Check is not successful"
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/api/media": {
+      "get": {
+        "operationId": "MediaController_findAll",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List media assets",
+        "tags": [
+          "Media"
+        ]
+      },
+      "post": {
+        "operationId": "MediaController_upload",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload media asset (multipart)",
+        "tags": [
+          "Media"
+        ]
+      }
+    },
+    "/api/media/{id}": {
+      "delete": {
+        "operationId": "MediaController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete media asset by ID",
+        "tags": [
+          "Media"
+        ]
+      },
+      "get": {
+        "operationId": "MediaController_findById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get media asset by ID",
+        "tags": [
+          "Media"
+        ]
+      }
+    },
+    "/api/s/{siteKey}/delivery/v1/categories": {
+      "get": {
+        "operationId": "DeliveryController_getCategories[1]",
+        "parameters": [
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List all categories for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/s/{siteKey}/delivery/v1/content": {
+      "get": {
+        "operationId": "DeliveryController_getPublishedContent[1]",
+        "parameters": [
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contentType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "tag",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Public list of published content entries",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/s/{siteKey}/delivery/v1/content/{slug}": {
+      "get": {
+        "operationId": "DeliveryController_getPublishedBySlug[1]",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contentType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get published content entry by slug",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/s/{siteKey}/delivery/v1/forms/submit": {
+      "post": {
+        "operationId": "DeliveryController_submitForm[3]",
+        "parameters": [
+          {
+            "name": "formKey",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Arbitrary form submission payload",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Submit public form data for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/s/{siteKey}/delivery/v1/forms/{formKey}/submissions": {
+      "post": {
+        "operationId": "DeliveryController_submitForm[2]",
+        "parameters": [
+          {
+            "name": "formKey",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Arbitrary form submission payload",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Submit public form data for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/s/{siteKey}/delivery/v1/pages": {
+      "get": {
+        "operationId": "DeliveryController_getPublishedPages[1]",
+        "parameters": [
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List all published pages for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/s/{siteKey}/delivery/v1/pages/{route}": {
+      "get": {
+        "operationId": "DeliveryController_getPublishedPageByRoute[1]",
+        "parameters": [
+          {
+            "name": "route",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get published page by route",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/s/{siteKey}/delivery/v1/robots.txt": {
+      "get": {
+        "operationId": "DeliveryController_getRobots[1]",
+        "parameters": [
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Dynamic robots.txt for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/s/{siteKey}/delivery/v1/sitemap.xml": {
+      "get": {
+        "operationId": "DeliveryController_getSitemap[1]",
+        "parameters": [
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Dynamic XML sitemap for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/s/{siteKey}/delivery/v1/tags": {
+      "get": {
+        "operationId": "DeliveryController_getTags[1]",
+        "parameters": [
+          {
+            "name": "siteKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-site-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List all tags for a site",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/tags": {
+      "get": {
+        "operationId": "TagsController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List tags",
+        "tags": [
+          "Tags"
+        ]
+      },
+      "post": {
+        "operationId": "TagsController_create",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTagDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create tag",
+        "tags": [
+          "Tags"
+        ]
+      }
+    },
+    "/api/tags/{id}": {
+      "delete": {
+        "operationId": "TagsController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete tag by ID",
+        "tags": [
+          "Tags"
+        ]
+      },
+      "get": {
+        "operationId": "TagsController_findById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get tag by ID",
+        "tags": [
+          "Tags"
+        ]
+      },
+      "patch": {
+        "operationId": "TagsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTagDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update tag by ID",
+        "tags": [
+          "Tags"
+        ]
+      }
+    }
+  },
+  "servers": [],
+  "tags": []
+}

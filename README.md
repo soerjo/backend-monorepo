@@ -100,3 +100,8 @@ bun run test
 # Run linter
 bun run lint
 ```
+
+---
+
+## 📖 Guides & Documentation
+- [Panduan Pengujian Email dengan Mailpit](docs/mailpit-guide.md)

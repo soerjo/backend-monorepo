@@ -100,3 +100,9 @@ bun run test
 # Run linter
 bun run lint
 ```
+
+---
+
+## 📖 Guides & Documentation
+- [Panduan Lengkap Infrastruktur Docker (PostgreSQL, Redis, Kafka, MinIO, Mailpit, Dashboards)](docs/infrastructure.md)
+- [Panduan Pengujian Email dengan Mailpit](docs/mailpit-guide.md)

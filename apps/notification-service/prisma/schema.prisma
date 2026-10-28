@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  SYSTEM
+  ADMIN
+  USER
+}
+
+model User {
+  id                    String   @id @default(uuid())
+  email                 String   @unique
+  password              String
+  firstName             String?
+  lastName              String?
+  isActive              Boolean  @default(true)
+  forgotPasswordRequest Boolean  @default(false)
+  role                  RoleName @default(USER)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  organizationId        String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("users")
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+
+  @@map("organizations")
+}
+
+enum NotificationChannel {
+  SOCKET_IO
+  TELEGRAM
+  EMAIL
+  FCM
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  RETRY
+}
+
+enum DeliveryLogStatus {
+  SUCCESS
+  FAILED
+}
+
+model Notification {
+  id              String              @id @default(uuid())
+  traceId         String              @map("trace_id") @db.VarChar(64)
+  idempotencyKey  String              @unique @map("idempotency_key") @db.VarChar(255)
+  channel         NotificationChannel
+  recipientId     String              @map("recipient_id") @db.VarChar(128)
+  recipientTarget String              @map("recipient_target") @db.VarChar(255)
+  templateCode    String?             @map("template_code") @db.VarChar(64)
+  title           String              @db.VarChar(255)
+  content         String              @db.Text
+  payload         Json                @default("{}")
+  status          NotificationStatus  @default(PENDING)
+  retryCount      Int                 @default(0) @map("retry_count")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  deliveryLogs NotificationDeliveryLog[]
+
+  @@index([traceId])
+  @@index([status])
+  @@index([idempotencyKey(ops: raw("text_pattern_ops"))], map: "notifications_idempotency_key_pattern_idx")
+  @@map("notifications")
+}
+
+model NotificationDeliveryLog {
+  id               BigInt            @id @default(autoincrement())
+  notificationId   String            @map("notification_id")
+  attempt          Int
+  status           DeliveryLogStatus
+  providerResponse Json              @default("{}") @map("provider_response")
+  latencyMs        Int               @map("latency_ms")
+  createdAt        DateTime          @default(now()) @map("created_at")
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([notificationId])
+  @@map("notification_delivery_logs")
+}

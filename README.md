@@ -63,7 +63,7 @@ cp docker/env.template .env
 ```
 
 ### 3. Start Local Infrastructure
-Start PostgreSQL, Redis, Kafka, MinIO, and Mailpit:
+Start PostgreSQL, Redis, Kafka, Kafbat UI (`http://localhost:8080`), MinIO, and Mailpit:
 ```bash
 bun run docker:up
 ```

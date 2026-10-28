@@ -1,0 +1,660 @@
+# AGENTS.md
+
+## Commands
+
+- `npm run build` — nest build (output to `dist/`, cleared each build)
+- `npm run start:dev` — dev server with watch (port 3000, overridable via `PORT` env)
+- `npm run lint` — eslint with auto-fix (flat config at `eslint.config.mjs`)
+- `npm run test` — unit tests (jest, `src/**/*.spec.ts`)
+- `npm run test:e2e` — e2e tests (jest, `test/**/*.e2e-spec.ts`, config at `test/jest-e2e.json`)
+- `npm run format` — prettier on `src/` and `test/`
+- `npm run test:cov` — coverage output to `coverage/`
+- `npx prisma generate` — regenerate Prisma client after schema changes
+- `npx prisma migrate dev` — create and apply a migration (dev)
+- `npx prisma migrate deploy` — apply pending migrations (prod)
+
+Run a single test file: `npx jest src/path/to/file.spec.ts`
+Run a single e2e test: `npx jest --config ./test/jest-e2e.json test/app.e2e-spec.ts`
+
+No typecheck script is defined; use `npx tsc --noEmit` to typecheck.
+
+## Key facts
+
+- NestJS v11, Express adapter, single app (no monorepo)
+- TypeScript with `module: "nodenext"`, target `ES2023`, `noImplicitAny: false`, `strictNullChecks: true`
+- ESLint uses `projectService: true` (type-aware linting) — typecheck errors can surface as lint errors
+- ESLint rule overrides: `@typescript-eslint/no-explicit-any` is off, `no-floating-promises` and `no-unsafe-argument` are warn
+- Prettier: single quotes, trailing commas
+- All imports use `.js` extensions (required by `nodenext` module resolution)
+- Jest v30 (both unit and e2e)
+
+## Architecture
+
+```
+src/
+  main.ts                  # Bootstrap, global pipes/filters/interceptors, Swagger setup
+  app.module.ts            # Root module, global guards (Throttler, JWT, Roles)
+  config/
+    env.validation.ts      # class-validator startup validation for env vars
+    logger.config.ts       # Winston logger config (console transport, NestJS-like format)
+  prisma/
+    prisma.module.ts       # @Global() PrismaModule
+    prisma.service.ts      # PrismaService (OnModuleInit/OnModuleDestroy lifecycle)
+  common/
+    constants/index.ts     # ROLES = { ADMIN, USER } (defined but unused — roles are hardcoded strings)
+    decorators/
+      current-user.decorator.ts   # @CurrentUser() / @CurrentUser('id')
+      public.decorator.ts         # @Public() — bypasses JwtAuthGuard
+      roles.decorator.ts          # @Roles('ADMIN') — restricts by role
+    dto/
+      base-response.dto.ts        # Shared response DTO (defined but unused)
+      pagination.dto.ts           # page/limit query DTO (defined but unused)
+    filters/
+      all-exceptions.filter.ts    # Global exception filter
+    guards/
+      jwt-auth.guard.ts           # Global JWT auth guard (respects @Public)
+      roles.guard.ts              # Global roles guard (queries userOrganization table for role names)
+    interceptors/
+      response-transform.interceptor.ts  # Wraps all responses in { statusCode, message, data, timestamp, path }
+    interfaces/
+      auth-user.interface.ts      # { id: string; email: string }
+      jwt-payload.interface.ts    # { sub: string; email: string }
+  modules/
+    auth/                         # Register, login (local strategy), JWT strategy, refresh
+      strategies/
+        local.strategy.ts         # Validates email/password via AuthService -> UsersRepository
+        jwt.strategy.ts           # Verifies Bearer token, calls AuthService.validateUserById
+      local-auth.guard.ts         # Non-global, used only on POST /auth/login
+    users/                        # CRUD (admin-guarded) + GET /me profile
+    organizations/                # CRUD (admin-guarded) + GET /slug/:slug (public)
+    roles/                        # CRUD (admin-guarded)
+    user-organizations/           # CRUD (admin-guarded) — junction table: user + org + role
+    health/                       # Terminus health check with Prisma indicator
+```
+
+## Database schema (PostgreSQL via Prisma v6)
+
+- **User** — id (UUID), email (unique), password, firstName?, lastName?, isActive (default true), timestamps
+- **Role** — id (UUID), name (unique), timestamps
+- **Organization** — id (UUID), name, slug (unique), description?, website?, logoUrl?, timestamps
+- **UserOrganization** — id (UUID), userId (FK), organizationId (FK), roleId (FK), timestamps; composite unique on `[userId, organizationId]`; cascade deletes on all FKs
+- No enums in schema — roles are string-based
+- No soft deletes implemented (isActive field exists on User but is never checked)
+
+## Routes
+
+All routes under global prefix `/api`. Total: 23 routes (4 public, 19 JWT-protected, 16 admin-gated) + 1 raw Express handler outside the prefix (`GET /metrics`, public — see Metrics below).
+
+### Auth (`/api/auth`)
+
+| Method | Path        | Auth                    | Description                                                 |
+| ------ | ----------- | ----------------------- | ----------------------------------------------------------- |
+| POST   | `/register` | Public                  | Register new user                                           |
+| POST   | `/login`    | Public + LocalAuthGuard | Login, returns `{ accessToken, refreshToken }`              |
+| POST   | `/refresh`  | JWT                     | Refresh tokens, returns new `{ accessToken, refreshToken }` |
+
+### Users (`/api/users`)
+
+| Method | Path   | Auth  | Description            |
+| ------ | ------ | ----- | ---------------------- |
+| GET    | `/me`  | JWT   | Current user's profile |
+| GET    | `/`    | ADMIN | List all users         |
+| GET    | `/:id` | ADMIN | Get user by ID         |
+| PATCH  | `/:id` | ADMIN | Update user by ID      |
+| DELETE | `/:id` | ADMIN | Delete user by ID      |
+
+### Organizations (`/api/organizations`)
+
+| Method | Path          | Auth   | Description               |
+| ------ | ------------- | ------ | ------------------------- |
+| GET    | `/`           | ADMIN  | List all organizations    |
+| GET    | `/:id`        | ADMIN  | Get organization by ID    |
+| GET    | `/slug/:slug` | Public | Get organization by slug  |
+| POST   | `/`           | ADMIN  | Create organization       |
+| PATCH  | `/:id`        | ADMIN  | Update organization by ID |
+| DELETE | `/:id`        | ADMIN  | Delete organization by ID |
+
+### Roles (`/api/roles`)
+
+| Method | Path   | Auth  | Description       |
+| ------ | ------ | ----- | ----------------- |
+| GET    | `/`    | ADMIN | List all roles    |
+| GET    | `/:id` | ADMIN | Get role by ID    |
+| POST   | `/`    | ADMIN | Create role       |
+| PATCH  | `/:id` | ADMIN | Update role by ID |
+| DELETE | `/:id` | ADMIN | Delete role by ID |
+
+### User-Organizations (`/api/user-organizations`)
+
+| Method | Path                            | Auth  | Description                  |
+| ------ | ------------------------------- | ----- | ---------------------------- |
+| GET    | `/`                             | ADMIN | List all assignments         |
+| GET    | `/user/:userId`                 | ADMIN | Org memberships for a user   |
+| GET    | `/organization/:organizationId` | ADMIN | Users in an organization     |
+| GET    | `/:id`                          | ADMIN | Get assignment by ID         |
+| POST   | `/`                             | ADMIN | Assign user to org with role |
+| PATCH  | `/:id`                          | ADMIN | Update assignment            |
+| DELETE | `/:id`                          | ADMIN | Remove assignment            |
+
+### Health (`/api/health`)
+
+| Method | Path | Auth   | Description     |
+| ------ | ---- | ------ | --------------- |
+| GET    | `/`  | Public | DB health check |
+
+### Metrics (`/metrics` — outside the `/api` prefix)
+
+| Method | Path       | Auth   | Description                                                                                    |
+| ------ | ---------- | ------ | ---------------------------------------------------------------------------------------------- |
+| GET    | `/metrics` | Public | Raw Express handler registered in `main.ts` — bypasses prefix, guards, throttler, and transform |
+
+## Request processing pipeline
+
+1. Winston logger (replaces NestJS default)
+2. Global prefix `/api`
+3. CORS enabled (all origins — default settings)
+4. Global `ValidationPipe` — whitelist, forbidNonWhitelisted, transform, enableImplicitConversion
+5. Global guards: ThrottlerGuard (10 req/60s) → JwtAuthGuard (respects `@Public()`) → RolesGuard (queries DB for role names across all user's org memberships)
+6. `AllExceptionsFilter` — normalizes all errors to `{ statusCode, message, errors?, timestamp, path }`
+7. `ResponseTransformInterceptor` — wraps success to `{ statusCode, message: "Success", data, timestamp, path }`
+
+## Authentication
+
+- **Login**: Passport local strategy validates email/password against DB (bcrypt, 10 salt rounds)
+- **JWT**: `passport-jwt` verifies Bearer token signed with `JWT_ACCESS_SECRET`; `JwtStrategy.validate()` confirms user still exists in DB
+- **RolesGuard**: queries `prisma.userOrganization` for the authenticated user's role names across ALL organizations — a user who is ADMIN in any org is ADMIN everywhere
+- **Refresh**: `POST /auth/refresh` requires valid access token; returns new token pair. Incoming refresh token is NOT validated (only access token is checked)
+- **Token payload**: `{ sub: user.id, email: user.email }` (see `JwtPayload` interface)
+
+## Environment variables
+
+| Variable                 | Required | Default       | Description                       |
+| ------------------------ | -------- | ------------- | --------------------------------- |
+| `NODE_ENV`               | No       | `development` | development \| production \| test |
+| `PORT`                   | No       | `3000`        | Server port                       |
+| `DATABASE_URL`           | Yes      | —             | PostgreSQL connection string      |
+| `JWT_ACCESS_SECRET`      | Yes      | —             | Signs access tokens               |
+| `JWT_REFRESH_SECRET`     | Yes      | —             | Signs refresh tokens              |
+| `JWT_ACCESS_EXPIRATION`  | No       | `15m`         | Access token expiry               |
+| `JWT_REFRESH_EXPIRATION` | No       | `7d`          | Refresh token expiry              |
+
+## Module pattern
+
+All business modules follow a 3-layer pattern:
+
+- **Controller** — HTTP handling, decorators (`@ApiTags`, `@Roles`, `@Public`)
+- **Service** — thin business logic, delegates to repository
+- **Repository** — direct Prisma queries, throws `NotFoundException` on missing entities
+- **DTOs** — Create DTO with `class-validator` + Swagger decorators; Update DTO via `PartialType(CreateDto)`
+
+## Code conventions
+
+- Password fields are destructured out before returning user objects
+- Update methods cast DTOs to `{ [key: string]: unknown }` before passing to repository
+- All Swagger DTOs use `@ApiProperty`/`@ApiPropertyOptional` with example values
+- Swagger UI at `/docs` (no global prefix), bearer auth configured
+
+## Known issues / technical debt
+
+- **Minimal test coverage** — only 2 spec files (`metrics.service.spec.ts`, `request-logging.middleware.spec.ts`, from the monitoring task); only 1 e2e test (health endpoint). `npm test` fails due to a jest config conflict (`jest.config.js` and the `jest` key in `package.json` are both present) — run scoped instead: `npx jest <path> --config jest.config.js`. Note: `test/jest-e2e.json` lacks the `.js`-extension `moduleNameMapper` added to `jest.config.js`, so the e2e spec's `.js` imports may fail to resolve (unverified; e2e requires a live DB)
+- **E2E test mismatch** — test setup doesn't apply `AllExceptionsFilter` or `ResponseTransformInterceptor`, so response shape differs from production
+- **Unused code**: `ROLES` constants, `BaseResponseDto`, `PaginationDto` are defined but never used
+- **`CreateRoleDto.organizationId`** is silently dropped — `RolesRepository.create()` only passes `{ name }`
+- **`User.isActive`** is never checked in login, JWT strategy, or guards
+- **Token expiry parsing** strips non-digits from strings like `"15m"` → `15`, which may be interpreted as 15 seconds
+- **No refresh token verification** — the refresh endpoint only validates the access token
+- **No helmet middleware** — no security headers configured
+- **CORS allows all origins** — security concern for production
+- **Role scoping issue** — roles are global (unique name), not per-organization, despite the junction table design
+
+## Implementation checklist: HTTP request logging + Prometheus metrics + Grafana
+
+Task: add per-request winston logging (method, url, status, duration) and prom-client metrics (`http_requests_total` counter, `http_request_duration_seconds` histogram; labels `method`/`route`/`status`) exposed at `/metrics`, scraped by Prometheus and visualized in Grafana.
+
+### Locked decisions
+
+| Decision                | Choice                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| Logging/metrics capture | Raw Express middleware registered in `main.ts` via `app.use()` (NOT an interceptor — guards reject 401/403/429 and unmatched 404 requests before interceptors run; middleware sees everything) |
+| Duration + status       | Measured with `performance.now()`; final status read on the `res.on('finish')` event (works even when `AllExceptionsFilter` writes the response) |
+| `/metrics` endpoint     | Raw Express handler via `app.use('/metrics', ...)` in `main.ts` — bypasses global prefix `/api`, JWT guard, throttler, and `ResponseTransformInterceptor` (which would JSON-wrap the Prometheus text format) |
+| Route label             | Route template from `req.route.path` (join if array), fallback `'unmatched'` when no route matched — avoids label cardinality explosion from UUIDs. Raw `originalUrl` is used for the log line instead |
+| Skipped paths           | `/metrics` only (no log line, not counted). `/api/health` stays logged                              |
+| Default process metrics | `collectDefaultMetrics()` from prom-client — ENABLED (adds process CPU/memory/event-loop series)     |
+| Grafana host port       | `3001:3000` (avoids clash with the app's default dev port 3000)                                     |
+| Pinned images           | `prom/prometheus:v3.15.0`, `grafana/grafana:13.0.10`                                                |
+| prom-client labels      | All label values coerced to strings (prom-client throws on `undefined`)                             |
+
+### Files to create / modify
+
+- Create `src/modules/metrics/metrics.module.ts` — plain `@Module` (no `@Global()`), provides `MetricsService`, imported by `AppModule`
+- Create `src/modules/metrics/metrics.service.ts` — owns a prom-client `Registry`:
+  - Counter `http_requests_total` (labels: `method`, `route`, `status`)
+  - Histogram `http_request_duration_seconds` (same labels; buckets `0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10`)
+  - `collectDefaultMetrics({ register })`
+  - `recordRequest(method, route, status, durationSeconds)` — increments counter + observes histogram in one call
+  - `getMetrics(): Promise<string>` and a `contentType` getter for the endpoint
+- Create `src/common/middleware/request-logging.middleware.ts`:
+  - Exported pure helper `getRouteLabel(req)` (unit-testable)
+  - Exported factory `createRequestLoggingMiddleware(logger, metricsService)` — calls `next()` immediately, hooks `res.on('finish')`, logs `METHOD originalUrl status durationMs` at winston `info` level with structured meta `{ method, url, status, durationMs, route }` via the injected raw winston logger, records both metrics, skips `/metrics` (bugfix: originally logged at `http` level, which was silently suppressed — the Console transport's default level is `info` and winston npm levels rank http=3 below info=2 in severity)
+- Modify `src/main.ts` — resolve `WINSTON_MODULE_PROVIDER` + `MetricsService` via `app.get()`, register the request-logging middleware and the `/metrics` handler (sets `Content-Type` from the registry's `contentType`, `await`s the metrics text before `res.end()` — `no-floating-promises` is enforced as a warning)
+- Modify `src/app.module.ts` — add `MetricsModule` to imports
+- Create `docker/prometheus/prometheus.yml` — `scrape_interval: 15s`, single job, `metrics_path: /metrics`, static target `app:5000` (service name + container port, NOT the host-mapped port)
+- Create `docker/grafana/provisioning/datasources/prometheus.yml` — datasource type `prometheus`, url `http://prometheus:9090`, `isDefault: true`, fixed `uid: prometheus` (dashboard references this uid deterministically)
+- Create `docker/grafana/provisioning/dashboards/dashboards.yml` — file-based dashboard provider, path `/var/lib/grafana/dashboards`
+- Create `docker/grafana/dashboards/nestjs-overview.json` — panels:
+  - Request rate by route: `sum(rate(http_requests_total[5m])) by (route)`
+  - Status code distribution: `sum by (status) (rate(http_requests_total[5m]))`
+  - p95 latency: `histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))`
+  - p99 latency: same with `0.99`
+  - Error ratio: `sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))`
+  - Process CPU / resident memory from default metrics (`process_cpu_seconds_total`, `process_resident_memory_bytes`)
+- Modify `docker-compose.yml` — add `prometheus` (pinned image, port `9090:9090`, read-only mount of `prometheus.yml`, `app-network`, `depends_on: app`) and `grafana` (pinned image, port `3001:3000`, read-only mounts of provisioning + dashboards dirs, named `grafana_data` volume, `GF_SECURITY_ADMIN_USER/PASSWORD=admin/admin` for dev, `depends_on: prometheus`) services, plus the `grafana_data` top-level volume
+
+### Ordered steps (all pending)
+
+- [x] **Step 1 — Install `prom-client`**
+  Install with `bun add prom-client` (the Docker dev container installs via bun) AND `npm install prom-client` (keeps `package-lock.json` in sync — repo carries three lockfiles: `package-lock.json`, `yarn.lock`, `bun.lock`).
+  Verify: `prom-client` present in `package.json` dependencies; both lockfiles show the addition in `git diff`.
+
+- [x] **Step 2 — Create `MetricsModule` + `MetricsService`**
+  Registry, counter, histogram, `collectDefaultMetrics()`, `recordRequest()`, `getMetrics()`, `contentType`. Add `MetricsModule` to `AppModule` imports. All imports use `.js` extensions (nodenext).
+  Verify: `npm run lint`, `npx tsc --noEmit`, `npm run build` all clean.
+  Outcome: metrics files + `app.module.ts` lint-clean; `npx tsc --noEmit` clean; `npm run build` clean (`dist/modules/metrics` emitted). Repo-wide `npm run lint` exits non-zero from 15 pre-existing errors + 1 warning in unrelated files (current-user.decorator, roles.guard, response-transform.interceptor, auth.service, register.dto, users.repository, main.ts) — pre-dates this step (HEAD had 21 problems); the gate's `--fix` resolved 5 formatting-only issues in auth.module/users.repository/users.service.
+
+- [x] **Step 3 — Create request-logging middleware; wire `/metrics` in `main.ts`**
+  `createRequestLoggingMiddleware(logger, metricsService)` + `getRouteLabel(req)` helper; register both middlewares in `main.ts` after `setGlobalPrefix`.
+  Verify: lint/tsc/build clean. Then `npm run start:dev` (requires valid `.env`):
+  - (a) `curl localhost:3000/api/health` → winston log line `GET /api/health 200 - Xms`
+  - (b) `curl localhost:3000/metrics` → Prometheus text format with `http_requests_total` + `http_request_duration_seconds_bucket` and correct `Content-Type` header
+  - (c) `curl localhost:3000/api/users` without token → 401 still logged and counted (middleware-sees-everything property)
+  - (d) hit a bogus path → route label `unmatched`, status 404
+  - (e) hit `/api/users/<uuid>` with admin token → route label `/api/users/:id`, not the raw UUID
+  - (f) repeat a request → counter value increments between scrapes
+  - (g) `/metrics` requests produce no log lines
+  Outcome: static gates pass — scoped eslint on changed files 0 errors (`main.ts` keeps its pre-existing `bootstrap()` floating-promise warning), `npx tsc --noEmit` clean, `npm run build` clean (`dist/common/middleware/` + wired `dist/main.js` emitted, verified in output). Runtime curl smoke test (a)–(g) deferred to parent, to be run separately. Parent smoke (a) surfaced a bug: request lines logged at `http` level were silently suppressed by the Console transport's default `info` level — middleware now logs at `info` level (meta structure unchanged, transport config untouched); fix re-verified with `npx tsc --noEmit` (clean).
+
+- [x] **Step 4 — Add docker config: prometheus scrape + grafana provisioning + compose services**
+  All `docker/` files listed above, pinned images `prom/prometheus:v3.15.0` and `grafana/grafana:13.0.10`, Grafana port `3001:3000`.
+  Verify: `docker compose config` parses cleanly. NOTE: the compose `app` service uses an anonymous `/app/node_modules` volume, so the image must be rebuilt to pick up `prom-client`: `docker compose build app && docker compose up -d --renew-anon-volumes app` (quick alternative: `docker compose exec app bun add prom-client`).
+  Outcome (verified externally by parent): `docker compose config` parses OK, dashboard JSON valid, all 4 config files present (`docker/prometheus/prometheus.yml`, `docker/grafana/provisioning/datasources/prometheus.yml`, `docker/grafana/provisioning/dashboards/dashboards.yml`, `docker/grafana/dashboards/nestjs-overview.json`); `prometheus` + `grafana` services and `grafana_data` volume added to compose. The app-image rebuild note above still applies before Step 5.
+
+- [x] **Step 5 — Start and verify the monitoring stack**
+  Verify: `docker compose up -d prometheus grafana`, then:
+  - (a) http://localhost:9090/targets shows the `app:5000` target UP
+  - (b) querying `http_requests_total` in the Prometheus UI returns samples
+  - (c) http://localhost:3001 (admin/admin) → datasource auto-provisioned, dashboard renders
+  - (d) generate load (`for i in $(seq 1 50); do curl -s localhost:3000/api/health > /dev/null; done`) → request-rate and latency panels move
+  Readiness (static pre-startup checks only; runtime verification owned by parent): all 4 docker config files present and parse-verified (Step 4); both pinned image tags exist on Docker Hub (`prom/prometheus:v3.15.0`, `grafana/grafana:13.0.10`); host port 9090 is free. **Startup blockers on this host** — another project's stack (my-pharmacy) is running and holds: port **3001** (its grafana), **5432** (its postgres), **6379** (its redis), and **3000** (its frontend; our `.env` sets `PORT=3000` so the compose `app` maps `3000:5000`) — `docker compose up` will fail to bind these until the parent either stops that stack or remaps our host ports (a 3001 remap would amend a locked decision, so it is the parent's call). Note: with the pharmacy stack up, Step 5(d)'s `curl localhost:3000` would hit its frontend, not our app. The Step 4 app-image rebuild for `prom-client` (`docker compose build app && docker compose up -d --renew-anon-volumes app`) is also still required before scraping can succeed.
+  Blocked (user decision, later resolved): host ports 3000/3001/5432/6379 are occupied by other live stacks (my-pharmacy, incl. `postgres_db` and `redis_cache`) — runtime compose verification was deferred until those ports were free or remapped. Local smoke test of `/metrics` + winston request logs already done and passing on host (app run on port 3100).
+  Verified (parent, live stack): `docker compose up` with a `docker-compose.override.yml` (compose project `nestjs-template`, safe host ports: app `3100`, prometheus `39090`, grafana `13001`) — Prometheus target `nestjs-app` health=UP; `http_requests_total` query returns samples (31 total); `histogram_quantile` p95 returns 0.015s; Grafana datasource `Prometheus` auto-provisioned and dashboard `NestJS Overview` present. Infra fix required during startup: `bunx prisma generate` inside the app container (Prisma client not generated in the fresh image).
+
+- [x] **Step 6 — Full gate + docs**
+  Verify: `npm run lint && npx tsc --noEmit && npm run build && npm test` all pass; `npm run test:e2e` (requires live DB; note the e2e app doesn't register the raw middlewares — same prod/e2e drift as documented above). Update the Routes section of this file to add `/metrics` (public, raw Express handler, outside the `/api` prefix).
+  Outcome (gate run externally by parent): `npx tsc --noEmit` OK; `npm run build` OK; `npm run lint` exits non-zero with 15 errors + 1 warning — all in files untouched by this task (pre-existing; verified at HEAD with 21 problems, the gate's `--fix` earlier resolved 5 formatting-only ones); `npm test` cannot run due to a pre-existing jest config conflict (`jest.config.js` AND the `jest` key in `package.json` are both present) plus no test files in the repo — unrelated to this task. Routes section of this file updated with `GET /metrics` (public, raw Express handler, outside the `/api` prefix). `npm run test:e2e` not part of this gate run.
+
+- [x] **Step 7 — Optional: unit tests**
+  `src/modules/metrics/metrics.service.spec.ts` (counter/histogram increments, string label coercion) and a spec for `getRouteLabel`. These would be the first unit tests in the repo (see Known issues).
+  Verify: `npx jest src/modules/metrics/metrics.service.spec.ts`.
+  Outcome: created `src/modules/metrics/metrics.service.spec.ts` (7 tests: prometheus content type, counter increments per request, distinct label series, numeric-status → string label coercion, histogram bucket placement for 0.12s, histogram count/sum, default process metrics present) and `src/common/middleware/request-logging.middleware.spec.ts` (5 tests for `getRouteLabel`: route template, array-path join, `'unmatched'` fallback for missing/non-string/empty/non-string-array paths). Infra fix required: added `'^(\\.{1,2}/.*)\\.js$': '$1'` to `jest.config.js` `moduleNameMapper` — jest could not resolve the repo's nodenext `.js`-extension relative imports (`Cannot find module './metrics.service.js'`); `test/jest-e2e.json` lacks the same mapper (pre-existing latent issue). Verification: `npx jest src/modules/metrics --config jest.config.js` → 7/7 passed; `npx jest src/common/middleware --config jest.config.js` → 5/5 passed; scoped eslint on both specs 0 problems; `npx tsc --noEmit` clean. `npm test` (unscoped) remains blocked by the pre-existing dual-config conflict documented in Known issues.
+
+### Risks / notes
+
+- `req.route.path` availability depends on Express 5 router internals — Step 3(e) verifies it explicitly; fallbacks are the `'unmatched'` label or deriving the route label from an interceptor instead
+- `/metrics` is unauthenticated — acceptable on the internal compose network; the app already publishes port 5000 to the host, so production should not expose `/metrics` publicly
+- Grafana admin password is `admin` for dev only — override via compose env vars in real deployments
+- Prometheus scrapes target the container port (`app:5000`), not the host-mapped port
+
+## Implementation checklist: GitHub Actions CI
+
+Task: add a single workflow `.github/workflows/ci.yml` (triggers: push to `main`, all `pull_request`) with jobs `quality`, `test`, `build` — all on Node 22 with npm cache. E2E excluded per user decision: this project uses unit tests only going forward. Do not write source code yet; this checklist covers prerequisite repo fixes first, then the workflow, then a local verification gate mirroring every CI command.
+
+### Locked decisions
+
+| Decision                | Choice                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| E2E excluded            | No `e2e` job in CI, no postgres/redis service containers — user decision; test/jest-e2e.json stays unfixed (moduleNameMapper debt remains, out of scope) |
+| Unit tests only         | Standing decision: unit tests only for this template — new features must ship with unit tests (`*.spec.ts`) next to the module |
+| Lint debt               | The 15 pre-existing eslint errors + 1 warning in `src` files are fixed as part of this task, so CI gates honestly (check-only lint is red from day one otherwise) |
+| Unit test scope         | Both spec directories gated: `src/modules/metrics` AND `src/common/middleware` (there are two spec files, one per dir) |
+| Artifact upload         | NO `dist/` upload — `build` job just runs `npm run build`                                            |
+| Job orchestration       | `test`, `build` gated with `needs: quality` (fast-fail; parallel-from-scratch is wasteful)          |
+| Lockfiles               | Three lockfiles remain (`package-lock.json`, `yarn.lock`, `bun.lock`) untouched; `npm ci` reads `package-lock.json` only — lockfile cleanup is a separate follow-up task |
+| Lint command in CI      | `npx eslint "src/**/*.ts" "test/**/*.ts"` check-only — the `lint` npm script bakes in `--fix` and must NOT be used in CI |
+
+### Ordered steps (all pending)
+
+- [x] **Step 1 — Fix the 15 pre-existing eslint errors + 1 warning in src files**
+  Run `npx eslint "src/**/*.ts" "test/**/*.ts"` to list all current problems. Known instances: `no-unused-vars` (unused imports like `User` in some files), `no-unsafe-call` in `src/main.ts` at `21:11` and `26:11`, plus issues in current-user.decorator, roles.guard, response-transform.interceptor, auth.service, register.dto, users.repository. Apply minimal, behavior-preserving changes only (remove unused imports, narrow `unknown` before property access, etc.). Do NOT widen existing rule overrides in `eslint.config.mjs` as a shortcut.
+  Verify: `npx eslint "src/**/*.ts" "test/**/*.ts"` exits 0 (or 0 errors + only the accepted `bootstrap()` floating-promise warning); `npx tsc --noEmit` clean; `npm run build` clean; scoped unit tests still pass (`npx jest src/modules/metrics src/common/middleware --config jest.config.js`).
+  Outcome: verified locally — check-only eslint exits 0 (no errors), `npx tsc --noEmit` clean, scoped jest passes 12/12 (7 metrics + 5 middleware).
+
+- [x] **Step 2 — Create `.github/workflows/ci.yml`**
+  Single workflow, triggers `push` (branches: `main`) + `pull_request`. Three jobs only (no `e2e`).
+  - **Job `quality`**: `actions/checkout@v4` → `actions/setup-node@v4` (`node-version: 22`, `cache: npm`) → `npm ci` → `npx prisma generate` → `npx eslint "src/**/*.ts" "test/**/*.ts"` (check-only, NO `--fix`) → `npx tsc --noEmit`.
+  - **Job `test`** (`needs: quality`): same checkout/setup-node/npm-ci steps → `npx jest src/modules/metrics src/common/middleware --config jest.config.js` (explicit `--config jest.config.js` because repo-wide `npm test` is blocked by the known dual-config conflict — `jest.config.js` AND the `jest` key in `package.json` are both present).
+  - **Job `build`** (`needs: quality`): same checkout/setup-node/npm-ci steps → `npm run build`. No artifact upload (see Locked decisions).
+  Verify: `node -e "JSON.stringify(require('./.github/workflows/ci.yml'))"` is NOT applicable (YAML not JSON) — instead validate structure by inspection or `docker run --rm -v "$PWD/.github/workflows/ci.yml:/w.yml" mikefarah/yq -e '.jobs | has("quality")' /w.yml` if docker unavailable, simplest: `npx yaml-lint .github/workflows/ci.yml` or visually confirm; minimum: file exists at correct path and `git status` shows only intended changes.
+  Outcome: `.github/workflows/ci.yml` created and validated with `python3 -c "import yaml; yaml.safe_load(...)"` — 3 jobs (`quality`, `test` needs quality, `build` needs quality), Node 22 + npm cache, concurrency group with cancel-in-progress on PRs, triggers push `main` + `pull_request`; no e2e job, no services, no secrets; descriptively named steps.
+
+- [x] **Step 3 — Final local verification gate (same commands as CI)**
+  Run in order and confirm all green:
+  1. `npm ci` (fresh install from package-lock.json)
+  2. `npx prisma generate`
+  3. `npx eslint "src/**/*.ts" "test/**/*.ts"` (exit 0)
+  4. `npx tsc --noEmit` (exit 0)
+  5. `npx jest src/modules/metrics src/common/middleware --config jest.config.js` (12 tests pass: 7 metrics + 5 middleware)
+  6. `npm run build` (exit 0, `dist/` emitted)
+  Then push to a branch / open PR and confirm all 3 jobs green on the GitHub Actions UI.
+  Outcome: gate passed locally — eslint check-only exit 0, `npx tsc --noEmit` clean (TSC_OK), scoped jest 12/12 passed, `npm run build` succeeded (BUILD_OK).
+
+### Risks / notes
+
+- `test/test-setup.ts` (loaded only via `jest.config.js` `setupFilesAfterEach` — i.e. the unit job) loads a local `.env` via dotenv and sets stale env-var names (JWT_SECRET_KEY, DATABASE_HOST, …) that nothing reads; benign in CI (no `.env` present, dotenv call is a no-op) but noted as future cleanup
+- The e2e setup (`test/jest-e2e.json` + `test/app.e2e-spec.ts`) remains in the repo but is NOT gated by CI anymore — the `.js`-extension moduleNameMapper debt and prod/e2e middleware drift stay as documented in Known issues; revisit only if e2e is re-scoped
+
+## Implementation checklist: Documentation set (docs/PRD.md, docs/API_CONTRACT.md, docs/DB_DESIGN.md)
+
+Task: write the v1 documentation set for the upcoming MinIO file-upload feature — DOCS ONLY. No source code, no Prisma schema edits, no migrations, no compose/MinIO changes, no interceptor/filter changes. The docs define the TARGET contract for the feature; implementing it (files module, envelope swap, module removals) is a separate future task.
+
+**NOTE — the Architecture / Database schema / Routes / Authentication sections earlier in this file are STALE relative to HEAD (`1d31ef8`).** Verified drift: the roles + user-organizations modules and their tables no longer exist; email (nodemailer) and Google OAuth modules exist; `User` now has a required `organizationId` FK and a `RoleName` enum; login returns only `{accessToken, refreshToken}`; the refresh endpoint is `POST /api/auth/refresh-token`. The Grounding facts below supersede those sections for this task.
+
+### Grounding facts (verified against HEAD, 2026-10-13)
+
+| Area                    | Fact                                                                                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth endpoints          | `POST /auth/register` (public) · `POST /auth/login` (public, LocalAuthGuard) · `GET /auth/verify-token` (JWT, returns `{valid, user}`) · `POST /auth/refresh-token` (public, body `{refreshToken}`) · `POST /auth/set-password` · `POST /auth/change-password` (JWT) · `POST /auth/forgot-password` / `POST /auth/reset-password` (public, email-driven) · `GET /auth/google` + `GET /auth/google/callback` |
+| Login return            | `auth.service.ts` `login()` returns `{accessToken, refreshToken}` only — NO `user` field today (deliberate drift vs the documented target)                                                          |
+| AuthUser shape          | `{id, email, firstName, lastName, role, organizationId}`                                                                                                                                           |
+| `users` table           | id uuid PK, email unique, password, firstName?, lastName?, isActive (default true), forgotPasswordRequest (default false), role `RoleName` (SYSTEM/ADMIN/USER, default USER), createdAt/updatedAt, **organizationId required** FK → organizations (onDelete: Cascade) |
+| `organizations` table   | id uuid PK, name, slug unique, logoUrl?, createdAt/updatedAt                                                                                                                                       |
+| Modules at HEAD         | auth, email, health, metrics, organizations, users — NO roles/user-organizations (stale sections are wrong), NO files module                                                                      |
+| MinIO                   | No `minio` dependency, no compose service — the file-upload feature is greenfield; the docs define the target                                                                                      |
+| Response envelope today | `{statusCode, message, data, timestamp, path}` (`ResponseTransformInterceptor`) — differs from the target envelope below                                                                           |
+| Infra                   | Global prefix `/api`, global ThrottlerGuard (10 req/60s), global JWT guard (`@Public()` opt-out), Swagger at `/docs`, winston logger, raw `/metrics` handler                                         |
+| `docs/`                 | Does not exist — create the directory                                                                                                                                                              |
+
+### Locked decisions
+
+| Decision                     | Choice                                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Login response shape         | Target: `{accessToken, refreshToken, user}` — per user spec. Docs must note the current code returns only the two tokens (drift is resolved at implementation time, NOT by editing docs to match code) |
+| Auth surface after simplify  | Document: register, login, verify-token, refresh-token, change-password. Removed / out of scope: Google OAuth (`google`, `google/callback`), `forgot-password`, `reset-password`, `set-password`     |
+| File access control          | Owner + ADMIN (uses the existing `RoleName` enum)                                                                                                                   |
+| `uploaded_by` FK             | `ON DELETE RESTRICT` — preserve upload history                                                                                                                      |
+| Response envelope (target)   | Success `{success: true, data, message?}`; error `{success: false, error: {code, message, details?}}`. Replaces the current `{statusCode, message, data, timestamp, path}`; the swap itself is future implementation work — docs only define and note it |
+| MIME whitelist (v1)          | Images: png, jpg, jpeg, gif, webp · PDF: pdf · Office: doc, docx, xls, xlsx, ppt, pptx · Text: txt, csv, md                                                          |
+| Max file size                | 25 MB, enforced server-side → `413 FILE_TOO_LARGE`                                                                                                                  |
+| Presigned download           | GET-method presigned URL, 15-minute expiry; `GET /files/:id/url` → `{url, expiresAt}` (ISO 8601)                                                                    |
+| Delete semantics             | Soft delete (`status` → `DELETED`); `DELETE /files/:id` → 200 + updated FileUpload; missing OR already-DELETED → `404 FILE_NOT_FOUND`; default list excludes DELETED |
+| List defaults                | `page=1`, `limit=20`; `search` = case-insensitive contains on `originalName`; `sort` = `field:asc|desc`, fields `createdAt|originalName|size`, default `createdAt:desc`; response `{items: FileUpload[], total, page, limit}` |
+| objectKey format             | Suggested `{userId}/{uuid}-{sanitizedOriginalName}` — uuid guarantees uniqueness; document sanitization rules                                                        |
+| Soft delete vs storage       | MinIO object NOT deleted on soft delete; DB row never removed in v1                                                                                                 |
+| Writing order                | PRD → DB_DESIGN → API_CONTRACT → consistency pass                                                                                                                   |
+
+### Files to create
+
+- `docs/PRD.md` — product requirements for the standalone file-upload app
+- `docs/DB_DESIGN.md` — existing tables + new `file_uploads` table design
+- `docs/API_CONTRACT.md` — simplified auth + new files endpoints, envelope, error catalog
+
+### Ordered steps (all pending)
+
+- [x] **Step 1 — Write `docs/PRD.md`**
+  Sections: Overview (standalone file-upload service on the existing NestJS template; MinIO objects + PostgreSQL metadata) · Goals v1 (upload with metadata, list/search/sort, detail, time-limited presigned downloads, soft delete) · Functional requirements FR1–FR5 (FR1 upload to bucket `app-uploads`, multipart field `file`, 25 MB max, MIME whitelist; FR2 metadata row in `file_uploads`; FR3 presigned GET URLs, 15-min expiry; FR4 list `page/limit/search/sort`; FR5 soft delete, DELETED excluded from default list) · MIME whitelist table (per Locked decisions) · Non-goals v1 (no public/anonymous sharing links, no chunked/resumable upload, no virus scanning, no checksum dedup, no hard-delete/purge job, no per-org quotas, no thumbnails/image processing, no folders/tagging, no download analytics) · Constraints (JWT on all file routes; 25 MB server-side → 413; sha256 computed server-side for integrity) · Scope changes vs template (REMOVE email + metrics modules, incl. `/metrics` endpoint and prometheus/grafana compose services; auth simplified — no forgot/reset-password email flows) · Dependencies (PostgreSQL, MinIO bucket `app-uploads`, existing JWT auth).
+  Verify: every number/list (25 MB, 15 min, whitelist) matches the Locked decisions table exactly; non-goals do not contradict goals.
+  Outcome: `docs/PRD.md` created (110 lines, prettier-formatted) with all outlined sections — Overview · Goals v1 · FR1–FR5 · MIME whitelist table · Non-goals (9 items) · Constraints · Scope changes vs template (email + metrics removal, auth simplification incl. Google OAuth/set-password removal, target envelope note) · Dependencies. Verified against the Locked decisions table: 25 MB max, 15-minute presigned expiry, `page=1`/`limit=20` defaults, `createdAt:desc` default sort, bucket `app-uploads`, all 15 whitelist extensions present (png, jpg, jpeg, gif, webp, pdf, doc, docx, xls, xlsx, ppt, pptx, txt, csv, md); non-goals reviewed against goals — no contradictions (presigned URLs explicitly noted as owner/ADMIN-generated and 15-min-limited so the no-public-sharing non-goal holds). Note: the doc set uses `forgotPasswordRequest` (actual column name — template columns are camelCase, no `@map`), NOT `forgot_password_request`.
+
+- [x] **Step 2 — Write `docs/DB_DESIGN.md`**
+  Sections: Overview (PostgreSQL via Prisma v6) · Existing tables — `users` (full current column list incl. required `organizationId` and `RoleName` enum; flag `forgotPasswordRequest` as obsolete after email-flow removal → drop candidate, do not invent removal SQL) and `organizations`; org 1-to-many users relation · New table `file_uploads` — columns: `id uuid PK default gen_random_uuid()`, `bucket text not null default 'app-uploads'`, `object_key text not null unique`, `original_name text not null`, `mime_type text not null`, `size_bytes integer not null check (size_bytes > 0)`, `checksum text not null`, `status text not null default 'ACTIVE' check (status in ('ACTIVE','DELETED'))`, `uploaded_by uuid not null references users(id) on delete restrict`, `created_at timestamptz not null default now()`, `updated_at timestamptz not null` · Indexes: `uploaded_by`, `created_at desc`, `checksum` · Prisma model mapping — equivalent `model FileUpload` block with `@@map("file_uploads")` + a raw SQL DDL sketch · Design notes (objectKey format per Locked decisions; soft-delete semantics — status flag, rows never removed; MinIO object retained on soft delete; `bucket` stored per-row for future multi-bucket; checksum purpose = integrity, NOT dedup, aligning with the PRD non-goal; DB row written after the MinIO put — not atomic, note as an implementation concern).
+  Verify: existing-table columns cross-checked against `prisma/schema.prisma`; the API field `size` ↔ DB column `size_bytes` mapping is stated explicitly.
+  Outcome: `docs/DB_DESIGN.md` created (175 lines, prettier-formatted) — Overview · existing `users`/`organizations` tables (all columns verified against `prisma/schema.prisma` AND all 6 migration SQL files; actual types documented: ids are TEXT holding uuids, timestamps TIMESTAMP(3), `role` is PG enum `"RoleName"`; `forgotPasswordRequest` flagged obsolete → drop candidate, no removal SQL invented) · relationships (mermaid ER, org→users CASCADE, users→file_uploads RESTRICT) · full `file_uploads` column spec with the 3 indexes · Prisma `model FileUpload` (`@@map("file_uploads")`, `@map` snake_case bridging, `@db.Timestamptz(6)`, `onDelete: Restrict` relation) · raw SQL DDL sketch · 8 design notes. Key reconciliation documented: the locked "uuid" id/`uploaded_by` types are stored as TEXT to match the template's `users.id` (FK types must match; altering `users.id` out of scope) — DDL uses `gen_random_uuid()::text`, Prisma uses client-side `@default(uuid())`. Also noted: Prisma has no CHECK-constraint syntax → the two CHECKs (`size_bytes > 0`, `status IN ('ACTIVE','DELETED')`) must be hand-added to the generated migration SQL. `size` ↔ `size_bytes` mapping stated explicitly in the field-mapping table.
+
+- [x] **Step 3 — Write `docs/API_CONTRACT.md`**
+  Sections: Conventions (base `/api`, Bearer JWT, JSON; `multipart/form-data` for upload) · Target envelope (per Locked decisions; explicit note that it replaces the current `{statusCode, message, data, timestamp, path}` shape) · Auth endpoints — `POST /auth/login` `{email, password}` → `{accessToken, refreshToken, user}` (target; note the code drift), `POST /auth/register`, `GET /auth/verify-token` → `{valid, user}`, `POST /auth/refresh-token` `{refreshToken}` → `{accessToken, refreshToken, user}`, `POST /auth/change-password` `{currentPassword, newPassword}`; User object `{id, email, firstName, lastName, role, organizationId}`; removed endpoints listed as out of scope (google, google/callback, forgot-password, reset-password, set-password) · Files endpoints — `POST /files/upload` (multipart field `file`) → FileUpload; `GET /files?page&limit&search&sort` → `{items, total, page, limit}`; `GET /files/:id` → FileUpload (404 `FILE_NOT_FOUND` for missing OR soft-deleted); `GET /files/:id/url` → `{url, expiresAt}`; `DELETE /files/:id` → 200 + updated FileUpload; access control owner + ADMIN · FileUpload object — field table: `id` uuid, `bucket`, `objectKey`, `originalName`, `mimeType`, `size` (bytes), `checksum` (sha256 hex), `status` ACTIVE|DELETED, `uploadedBy` uuid, `createdAt`, `updatedAt` · Error catalog — 400 `VALIDATION_ERROR`, 401 `UNAUTHORIZED`/`TOKEN_EXPIRED`, 404 `FILE_NOT_FOUND`, 413 `FILE_TOO_LARGE`, 415 `UNSUPPORTED_MEDIA_TYPE`, 429 `RATE_LIMITED`, 500 `INTERNAL_ERROR`/`MINIO_UNAVAILABLE` — each with a sample error body · One curl example per endpoint (happy path + at least one error).
+  Verify: existing auth routes cross-checked against `src/modules/auth/auth.controller.ts`; every response field matches the Step 2 spec; `/api` prefix used consistently.
+  Outcome: `docs/API_CONTRACT.md` created (496 lines, prettier-formatted) — Conventions (base `/api`, Bearer JWT, token lifetimes 15m/7d, JSON + multipart for upload, throttle 10/60s) · target envelope with explicit replacement note for the current `{statusCode, message, data, timestamp, path}` shape · auth endpoints (login → `{accessToken, refreshToken, user}` with code-drift note, register → 201 + User incl. auto-org/ADMIN-role note, verify-token, refresh-token, change-password; request rules grounded in the actual DTOs incl. min-length-8 password rules) · User object table · removed endpoints listed (google, google/callback, forgot-password, reset-password, set-password) · files endpoints (upload 201, list `{items, total, page, limit}` with query rules + USER-own/ADMIN-all scope + limit clamp 100, get-by-id, presigned URL `{url, expiresAt}` +15min, DELETE 200 + soft-delete semantics) · FileUpload field table (all 11 fields matching Step 2, with `size`↔`size_bytes` and `uploadedBy`↔`uploaded_by` mapping notes) + sample JSON · error catalog (all 9 codes with sample bodies) · one curl per endpoint (10 happy paths) + error examples (401 login, 415 upload, 400 list sort, 404 get). Verified: controller's 10 routes exactly = 5 documented + 5 removed-listed; all 9 error codes present; all 10 curl examples use `localhost:3000/api`.
+
+- [x] **Step 4 — Cross-file consistency pass (no new files)**
+  Check: identical terminology across the three files (`size` API field vs `size_bytes` DB column, mapping stated in both directions); 25 MB / MIME whitelist / 15 min identical in PRD and API contract; error codes in the contract match PRD constraints (413/415); FileUpload fields ↔ `file_uploads` columns mapping consistent; all paths use the `/api` prefix; no references to stale modules except the explicit removal notes.
+  Verify: read all three docs end-to-end; `rg -n "25 ?MB|15 ?min|expiresAt|size_bytes" docs/` shows consistent values; optional `npx prettier --check "docs/**/*.md"` (no repo script covers `docs/`).
+  Outcome: all three docs read end-to-end and verified — `rg` output shows 25 MB / 15-min / `expiresAt` / `size_bytes` consistent across files; MIME whitelist extension sets identical in PRD §4 and API_CONTRACT §4.1 (diff empty); error codes FILE_TOO_LARGE / UNSUPPORTED_MEDIA_TYPE / RATE_LIMITED / FILE_NOT_FOUND present in both PRD and the API catalog; FileUpload's 11 fields ↔ `file_uploads`' 11 columns mapping consistent (`size`↔`size_bytes` and `uploadedBy`↔`uploaded_by` stated in both directions — DB_DESIGN §4 and API_CONTRACT §5); no unprefixed paths in the PRD; stale modules referenced only in the explicit removal notes (PRD §7, API_CONTRACT §3.7); `npx prettier --check "docs/**/*.md"` passes. **4 minor inconsistencies found and fixed**: (1) API register 201 sample listed `createdAt`/`updatedAt` which the §3.6 User object doesn't define — removed; (2) API §5 objectKey note used the abbreviated `{userId}/{uuid}-{name}` — aligned to `{userId}/{uuid}-{sanitizedOriginalName}` (PRD FR1 / DB_DESIGN §6.1 terminology); (3) PRD §7 endpoint lists lacked the `/api` prefix used by the PRD's FR sections — rewritten to full `/api/auth/...` paths; (4) PRD FR2 column enumeration omitted `id` — added. Note: API_CONTRACT's §3/§4 headers use controller-relative paths by declared convention (§1 states base URL `http://<host>:<port>/api`; all curl examples use full `/api` URLs) — unambiguous, left as is.
+
+### Risks / notes
+
+- The docs describe the TARGET state — where a locked decision deliberately differs from current code (login `user` field, response envelope, removed auth endpoints), the docs win; do not "fix" them to match the code
+- The stale Architecture / Database schema / Routes / Authentication sections earlier in this file must NOT be used as a source for these docs — use the Grounding facts table above
+- `forgotPasswordRequest` on `users` becomes obsolete once email flows are removed — flag as a drop candidate in DB_DESIGN only; no migration is written in this task
+- No format/lint gate covers `docs/` (`npm run format` is scoped to `src/` and `test/`) — a prettier check is optional
+- Refreshing the stale Architecture/Routes/DB sections of this file is a separate follow-up task, explicitly out of scope here
+
+## Implementation checklist: Refactor — takeout email+metrics, simplify auth
+
+Task: remove the email and metrics modules entirely (code, dependencies, docker monitoring stack) and simplify the auth surface to `register` / `login` / `verify-token` / `refresh-token` / `change-password`. Google OAuth is removed entirely (user decision, confirmed 2026-10-13) along with `set-password`, `forgot-password`, `reset-password`. Drop the obsolete `forgotPasswordRequest` column via a Prisma migration. This implements the target state already specified in `docs/PRD.md` §7 — the docs were written for this refactor and need NO changes. All steps 1–8 are implemented (see Outcomes) — this checklist is complete.
+
+**NOTE — the Architecture / Database schema / Routes / Authentication sections earlier in this file are STALE relative to HEAD (`1aa8187`). Use the Grounding facts below (extends the table in the Documentation checklist section above).**
+
+### Grounding facts (verified against HEAD `1aa8187`, 2026-10-13)
+
+| Area                        | Fact                                                                                                                                                                                               |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Email module                | 3 files (`email.module.ts` `@Global`, `email.service.ts`, `templates/forgot-password.html`); imported only in `app.module.ts`; `EmailService` injected only in `AuthService` (forgot-password flow) |
+| Metrics module              | 3 files (module, service, spec); `MetricsModule` imported in `app.module.ts`; `MetricsService` used in `main.ts` (raw `/metrics` handler) and `request-logging.middleware.ts` (metrics recording only) |
+| Auth removal targets        | Routes `google`, `google/callback`, `set-password`, `forgot-password`, `reset-password` + `google-auth.guard.ts`, `strategies/google.strategy.ts`, `validateGoogleUser()`, DTOs `set-password.dto.ts` / `forgot-password.dto.ts` / `reset-password.dto.ts` |
+| `forgotPasswordRequest`     | Referenced ONLY by code being removed (`auth.service.ts` forgotPassword/resetPassword; `users.repository.ts` `findUserRequestForgotPassword` / `updateForgotPasswordReq`); boolean flag added by migration `20260411232748` → safe to drop |
+| Env vars losing all consumers | `SMTP_*` (email module), `GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL` (Google strategy), `FRONTEND_URL` (google callback redirect + forgotPassword reset URL — both removed)                          |
+| Docker monitoring           | `docker/prometheus/`, `docker/grafana/` (4 files), compose `prometheus` + `grafana` services + `grafana_data` volume — AND `docker-compose.override.yml` has `prometheus`/`grafana` `!override` port blocks that must be removed too, or `docker compose config` breaks |
+| `npm test` today            | HARD FAILS — jest 30: "Multiple configurations found" (`jest.config.js` + `jest` key in `package.json`, verified via `npx jest --showConfig`); also `jest.config.js` `testRegex '.spec.ts$'` would match `test/app.e2e-spec.ts` (needs live DB) once the key is removed → must scope via `testMatch` |
+| CI                          | `.github/workflows/ci.yml` test job runs `npx jest src/modules/metrics src/common/middleware --config jest.config.js` — breaks when the metrics spec is deleted → switch to `npm test`          |
+| Toolchain                   | bun NOT on host; docker available (29.9.0); both Dockerfiles `COPY package.json bun.lock` + non-frozen `bun install` (stale lockfile won't break builds but should be regenerated); `.env` absent on host (gitignored); compose override maps app→3100, postgres→55432, redis→6380 |
+
+### Locked decisions
+
+| Decision                                | Choice                                                                                                                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Google OAuth                            | REMOVED entirely — endpoints, guard, strategy, `validateGoogleUser()`, `passport-google-oauth20` + `@types/passport-google-oauth20` deps, `GOOGLE_*` + `FRONTEND_URL` env vars. The stranded-user problem disappears together with `set-password` |
+| Auth surface after refactor             | `register`, `login`, `verify-token`, `refresh-token`, `change-password` only                                                                                          |
+| Request-logging middleware              | KEPT, logging-only — metrics recording stripped; `getRouteLabel` + its spec survive unchanged (matches `docs/PRD.md` §7)                                             |
+| `/metrics` endpoint                     | Removed from `main.ts` (raw Express handler)                                                                                                                         |
+| `forgotPasswordRequest`                 | Dropped via Prisma migration (safe — see Grounding facts); the column holds only a boolean flag                                                                      |
+| `bun.lock`                              | Regenerated via `docker run --rm -v "$PWD":/app -w /app oven/bun:1-alpine bun install` (bun not on host); `yarn.lock` untouched (nothing consumes it)                 |
+| Jest fix (required for the `npm test` gate) | Delete the `jest` key from `package.json`; scope `jest.config.js` to src specs via `testMatch`; CI test job switches to `npm test`                               |
+| `docs/`                                 | NO changes — already specifies this exact target state                                                                                                              |
+| AGENTS.md stale sections                | NOT refreshed in this task (user decision) — only this checklist section is added                                                                                    |
+| e2e setup                               | Untouched (`test/jest-e2e.json` + `test/app.e2e-spec.ts` keep their pre-existing drift; not gated by CI)                                                             |
+
+### Files to delete / modify
+
+**Delete** — `src/modules/email/` (3 files) · `src/modules/metrics/` (3 files) · `src/modules/auth/google-auth.guard.ts` · `src/modules/auth/strategies/google.strategy.ts` · `src/modules/auth/dto/set-password.dto.ts` · `src/modules/auth/dto/forgot-password.dto.ts` · `src/modules/auth/dto/reset-password.dto.ts` · `docker/prometheus/` · `docker/grafana/` (4 files)
+
+**Modify** — `auth.controller.ts` (remove 5 handlers + unused imports) · `auth.service.ts` (remove `validateGoogleUser` / `setPassword` / `forgotPassword` / `resetPassword`, `EmailService` injection, `User` type import; reword stale change-password message) · `auth.module.ts` (remove `GoogleStrategy`) · `users.repository.ts` (remove the 2 forgot-password methods) · `app.module.ts` (remove `EmailModule` + `MetricsModule`) · `main.ts` (remove `MetricsService` + `/metrics` handler) · `request-logging.middleware.ts` (logging-only) · `env.validation.ts` + `.env.example` (remove `SMTP_*`, `GOOGLE_*`, `FRONTEND_URL`) · `docker-compose.yml` (remove 2 services + `grafana_data` volume) · `docker-compose.override.yml` (remove prometheus/grafana blocks) · `package.json` (uninstall 5 packages, delete `jest` key) · `jest.config.js` (`testMatch` scoped to src) · `.github/workflows/ci.yml` (test step → `npm test`) · `prisma/schema.prisma` (remove `forgotPasswordRequest`) · + generated `prisma/migrations/<ts>_remove_forgot_password_request/`
+
+### Ordered steps (all pending)
+
+- [x] **Step 1 — Simplify auth + remove Google OAuth** (do first — keeps compilation green while the email module still exists)
+  `auth.controller.ts`: remove the `google`, `google/callback`, `set-password`, `forgot-password`, `reset-password` handlers + now-unused imports (`GoogleAuthGuard`, the 3 DTOs, `Res`/`Response` — keep `Get`, `Req`, still used by verify-token/login). Delete `google-auth.guard.ts`, `strategies/google.strategy.ts`, and the 3 DTO files. `auth.module.ts`: remove `GoogleStrategy` import + provider. `auth.service.ts`: delete `validateGoogleUser()`, `setPassword()`, `forgotPassword()`, `resetPassword()`; remove the `EmailService` import + constructor param; drop `User` from the `@prisma/client` import (keep `$Enums` — used by `register`); reword change-password's stale "No password set. Use set password instead." message. `users.repository.ts`: delete `findUserRequestForgotPassword()` + `updateForgotPasswordReq()`. `env.validation.ts` + `.env.example`: remove `GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL` + `FRONTEND_URL` (all consumers removed).
+  Verify: `rg -n 'google|Google|GOOGLE_|FRONTEND_URL|ForgotPassword|SetPassword' src/ .env.example` → 0 hits; `npx tsc --noEmit` clean.
+  Outcome: all Step 1 edits applied — 5 handlers removed from `auth.controller.ts` (`google`, `google/callback`, `set-password`, `forgot-password`, `reset-password`) + now-unused imports (`GoogleAuthGuard`, the 3 DTOs, `Res`/`Response`); deleted `google-auth.guard.ts`, `strategies/google.strategy.ts`, `dto/set-password.dto.ts`, `dto/forgot-password.dto.ts`, `dto/reset-password.dto.ts`; `auth.module.ts` no longer provides `GoogleStrategy`; `auth.service.ts` lost `validateGoogleUser()` / `setPassword()` / `forgotPassword()` / `resetPassword()`, the `EmailService` import + constructor param, and the `User` type import (`$Enums` kept for `register`), change-password message reworded to 'No password set for this account.'; `users.repository.ts` lost `findUserRequestForgotPassword()` + `updateForgotPasswordReq()`; `GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL` + `FRONTEND_URL` removed from `env.validation.ts` + `.env.example`. Verified: rg sweep → 0 hits (exit 1, no matches); `npx tsc --noEmit` clean; repo-wide check-only eslint (`npx eslint "src/**/*.ts" "test/**/*.ts"`) exits 0. Infra note: this host had no `node_modules` (bare `npx tsc` resolves a bogus `tsc` npm package) — ran `npm ci` + `npx prisma generate` first; tsc requires the generated Prisma client.
+
+- [x] **Step 2 — Remove email module**
+  Delete `src/modules/email/`. Remove `EmailModule` import + entry from `app.module.ts`. Remove the 5 `SMTP_*` fields from `env.validation.ts` + the SMTP block from `.env.example`.
+  Verify: `rg -n 'EmailService|EmailModule|nodemailer|SMTP_' src/ .env.example` → 0 hits; `npx tsc --noEmit` + `npm run build` clean.
+  Outcome: `src/modules/email/` deleted (3 files: `email.module.ts`, `email.service.ts`, `templates/forgot-password.html`); `EmailModule` import + imports-array entry removed from `app.module.ts` (MetricsModule untouched — that is Step 3); the 5 `SMTP_*` fields removed from `env.validation.ts` (all remaining class-validator decorators still used — `IsPort` still serves `PORT`); the SMTP block removed from `.env.example` (file now ends at `JWT_REFRESH_EXPIRATION`). Verified: rg sweep → 0 hits (exit 1, no matches); `npx tsc --noEmit` clean; `npm run build` succeeded — `dist/modules` contains auth, health, metrics, organizations, users (no email; dist cleared per build); repo-wide check-only eslint exits 0.
+
+- [x] **Step 3 — Remove metrics module; middleware goes logging-only**
+  Delete `src/modules/metrics/`. Remove `MetricsModule` from `app.module.ts`. `main.ts`: remove the `MetricsService` import, `app.get(MetricsService)`, and the `/metrics` handler; keep `app.use(createRequestLoggingMiddleware(winstonLogger))`. `request-logging.middleware.ts`: drop the `MetricsService` import/param/`recordRequest` call + the now-dead `SKIPPED_PATHS` skip (no `/metrics` endpoint anymore); keep `getRouteLabel` + the winston log line — the spec survives unchanged.
+  Verify: `npx tsc --noEmit` + `npm run build` clean; `npx jest src/common/middleware --config jest.config.js` → 5/5 pass; `rg -n 'MetricsService|MetricsModule|prom-client|/metrics' src/` → 0 hits.
+  Outcome: `src/modules/metrics/` deleted (module, service, spec); `MetricsModule` import + imports-array entry removed from `app.module.ts`; `main.ts` lost the `MetricsService` import, `app.get(MetricsService)`, and the `/metrics` raw handler (also dropped the now-unused `Request`/`Response` type imports from express) — middleware registration is now `createRequestLoggingMiddleware(winstonLogger)`; `request-logging.middleware.ts` is logging-only: `MetricsService` import/param + `recordRequest()` call + the `SKIPPED_PATHS` skip removed, `getRouteLabel` + the winston log line kept, factory signature collapsed to a single `logger` param — the spec survived unchanged. Verified: rg sweep → 0 hits (exit 1, no matches); `npx tsc --noEmit` clean; `npm run build` succeeded (`dist/modules` = auth, health, organizations, users — no metrics; `dist/common/middleware` still emitted); `npx jest src/common/middleware --config jest.config.js` → 5/5 pass; repo-wide check-only eslint exits 0.
+
+- [x] **Step 4 — Docker monitoring cleanup**
+  Delete `docker/prometheus/` + `docker/grafana/`. `docker-compose.yml`: remove the `prometheus` + `grafana` services and the `grafana_data` volume. `docker-compose.override.yml`: remove the `prometheus`/`grafana` port blocks (keep the app 3100 / postgres 55432 / redis 6380 remaps).
+  Verify: `docker compose config` parses; services = app, postgres, redis only; `rg -n 'prometheus|grafana'` hits only in `docs/` + this file.
+  Outcome: `docker/prometheus/` + `docker/grafana/` deleted (4 files) — the `docker/` dir contained nothing else and was removed entirely; the `prometheus` + `grafana` services and the `grafana_data` volume removed from `docker-compose.yml`; the `prometheus`/`grafana` `!override` port blocks removed from `docker-compose.override.yml` (app 3100 / postgres 55432 / redis 6380 remaps kept). Verified: `docker compose config` parses with services = app, postgres, redis only (compose emits a pre-existing warning about the obsolete top-level `version: '3.8'` attribute — ignored by compose, out of scope); repo-wide `rg -n 'prometheus|grafana'` (excluding .git/node_modules/dist/coverage) hits only `docs/PRD.md` + this file, plus 1 benign hit in `package-lock.json` (npm deprecation notice in `prom-client`'s dependency metadata — `prom-client` is uninstalled in Step 5, after which that hit disappears).
+
+- [x] **Step 5 — Remove dependencies + regenerate bun.lock**
+  `npm uninstall nodemailer prom-client passport-google-oauth20 && npm uninstall -D @types/nodemailer @types/passport-google-oauth20` (updates `package.json` + `package-lock.json`). Regenerate `bun.lock`: `docker run --rm -v "$PWD":/app -w /app oven/bun:1-alpine bun install`. `yarn.lock` untouched.
+  Verify: `git diff package.json` shows exactly the 5 removals; `npm ci` succeeds; `git diff --stat` shows `bun.lock` updated.
+  Outcome: `npm uninstall nodemailer prom-client passport-google-oauth20 && npm uninstall -D @types/nodemailer @types/passport-google-oauth20` executed — 10 packages removed (5 direct + transitive); `git diff package.json` shows exactly the 5 dependency-line removals. `bun.lock` regenerated via `docker run --rm -v "$PWD":/app -w /app -u $(id -u):$(id -g) -e HOME=/tmp oven/bun:1-alpine bun install` — the `-u`/`-e HOME` flags were added to the planned command so the regenerated `bun.lock` stays host-user-owned instead of root-owned (bind-mount gotcha); bun pruned 29 entries. Deviation handled: npm auto-synced `yarn.lock` during the uninstall (npm behavior when a yarn.lock exists) — restored it to HEAD with `git restore yarn.lock` per the locked decision, confirmed 0 diff after. Because bun's install left a bun-managed `node_modules` with blocked postinstalls, the gate re-ran `npm ci` (802 packages — also validates `package-lock.json`) + `npx prisma generate` + `npx tsc --noEmit` (clean). Verified: `git diff --stat` shows `bun.lock` + `package-lock.json` + `package.json` updated and `yarn.lock` untouched; rg for `nodemailer|prom-client|passport-google-oauth20|prometheus` in `bun.lock` + `package-lock.json` → 0 hits (Step 4's transient package-lock deprecation-notice hit is gone).
+
+- [x] **Step 6 — Prisma: drop `forgotPasswordRequest`**
+  Pre-check: `rg -n 'forgotPasswordRequest' src/` → 0 hits (guaranteed by Step 1). Remove the field from `prisma/schema.prisma`. Start the DB (`docker compose up -d postgres`) and run `DATABASE_URL='postgresql://postgres:postgres@localhost:55432/app?schema=public' npx prisma migrate dev --name remove_forgot_password_request` (migrate dev regenerates the Prisma client; prisma auto-loads `.env` but the inline env var wins — `.env` is absent on this host anyway).
+  Verify: generated migration SQL is exactly one statement — `ALTER TABLE "users" DROP COLUMN "forgotPasswordRequest";`; `npx prisma migrate status` → all applied; `npx tsc --noEmit` clean with the regenerated client.
+  Outcome: split execution — the subagent performed the schema edit (removed the `forgotPasswordRequest` field from `prisma/schema.prisma`, single-line diff, nothing else); the migration itself was run and verified by the parent agent (per user instruction) against the override DB target — NOT the checklist's original compose-postgres `localhost:55432/app` command: `postgres_db` container, host port 5432, database `minio_file_db`, user `soerjo_pg`, credentials from `/tmp/.ce/database/.env` (the subagent's direct reads of that file were permission-rejected, hence the parent executed). The DB was empty (verified beforehand: `psql \dt` → no relations), so `prisma migrate dev` baseline-applied all 6 pre-existing migrations, then created + applied `prisma/migrations/20261013023927_baseline_and_drop_forgot/migration.sql` — its SQL is exactly one statement, `ALTER TABLE "users" DROP COLUMN "forgotPasswordRequest";` (naming deviation: parent used `baseline_and_drop_forgot`, not the planned `remove_forgot_password_request`; content matches the verify exactly). Confirmed post-hoc by the subagent (read-only): `_prisma_migrations` ledger shows all 7 migrations finished at 2026-10-13 02:39:27 UTC; `psql \d users` shows no `forgotPasswordRequest` column (remaining columns: id, email, password, firstName, lastName, isActive, createdAt, updatedAt, organizationId, role); the Prisma client was regenerated by the parent's `migrate dev` run and `npx tsc --noEmit` is clean with it.
+
+- [x] **Step 7 — Fix `npm test` + CI (mandatory for the gate)**
+  `package.json`: delete the `jest` key (jest 30 refuses dual configs — verified: "Multiple configurations found"). `jest.config.js`: replace `testRegex: '.spec.ts$'` with `testMatch: ['<rootDir>/src/**/*.spec.ts']` so the unit run excludes `test/app.e2e-spec.ts` (needs a live DB; e2e stays governed by `test/jest-e2e.json` via `npm run test:e2e`). `.github/workflows/ci.yml`: change the test-job step `npx jest src/modules/metrics src/common/middleware --config jest.config.js` → `npm test` (the old command references the deleted metrics spec path).
+  Verify: `npm test` → 1 suite (`request-logging.middleware.spec.ts`), 5/5 pass; `npx jest --showConfig` resolves without the dual-config error.
+  Outcome: the `jest` key (17 lines) deleted from `package.json` (its rootDir/testRegex/transform/collectCoverageFrom/coverageDirectory/testEnvironment were all superseded by `jest.config.js`); `jest.config.js` `testRegex: '.spec.ts$'` replaced with `testMatch: ['<rootDir>/src/**/*.spec.ts']` — the unit run now excludes `test/app.e2e-spec.ts` (needs a live DB; e2e stays governed by `test/jest-e2e.json` via `npm run test:e2e`); the CI test-job step switched from `npx jest src/modules/metrics src/common/middleware --config jest.config.js` (dead metrics spec path) to `npm test`, step name simplified to 'Run unit tests'. Verified: `npm test` → 1 suite (`src/common/middleware/request-logging.middleware.spec.ts`), 5/5 passed; `npx jest --showConfig` exits 0, resolves via `jest.config.js` with testMatch `<rootDir>/src/**/*.spec.ts`, and no longer emits 'Multiple configurations found'; `package.json` still parses as valid JSON; `ci.yml` still parses as valid YAML. No lockfile impact — the `jest` key was package.json config, not lockfile content.
+
+- [x] **Step 8 — Full verification gate**
+  In order: `npm run lint` (script bakes in `--fix`; also run CI's check-only `npx eslint "src/**/*.ts" "test/**/*.ts"` → exit 0) · `npx tsc --noEmit` · `npm run build` (`dist/` is cleared each build, so removed modules vanish) · `npm test` (5/5). Reference sweep: `rg -n 'nodemailer|prom-client|passport-google-oauth20|MetricsService|MetricsModule|EmailService|EmailModule|SMTP_|GOOGLE_|FRONTEND_URL|forgotPassword|set-password|/metrics' src test docker docker-compose.yml docker-compose.override.yml package.json .env.example .github` → 0 hits. Re-run `docker compose config`. Optional runtime smoke (needs `.env` from `.env.example` + postgres up): `GET /api/health` → 200 + winston request log line; `GET /metrics` → 404 JSON envelope; `POST /api/auth/forgot-password` → 404; register → login → change-password round-trip works.
+  Outcome (parent-verified; no-code status update by the subagent): the full gate was run externally by the parent agent — `npm run lint` exit 0 · `npx tsc --noEmit` exit 0 · `npm run build` exit 0 · `npm test` exit 0 (5/5) · reference sweep confirmed zero references to `nodemailer` / `prom-client` / `MetricsModule` / `EmailModule` / `forgotPassword`. The optional runtime smoke (`.env` + postgres + curl round-trip) was not part of the parent's report and remains optional per the step text. Checklist complete — final state: email + metrics modules deleted (code, deps, docker monitoring stack), auth surface reduced to register / login / verify-token / refresh-token / change-password (Google OAuth + set-password / forgot-password / reset-password removed), `forgotPasswordRequest` dropped via `20261013023927_baseline_and_drop_forgot` (applied to `minio_file_db` on `postgres_db`), request-logging middleware retained as logging-only with its 5-test spec, 5 packages uninstalled + `bun.lock` regenerated (`yarn.lock` untouched), jest dual-config fixed (`npm test` green), CI test job switched to `npm test`.
+
+### Risks / notes
+
+- AGENTS.md fails `npx prettier --check` today (pre-existing) — do NOT run prettier `--write` on this file
+- `npm run lint` auto-fixes; the `bootstrap()` floating-promise warning in `main.ts` is warn-level and does not fail the gate
+- Existing dev-DB rows for Google-registered users (`password: ''`) can no longer change password — accepted; the v1 target has no Google users by design
+- change-password's `!user.password` branch becomes effectively dead once Google/set-password are gone — harmless defensive code, leave as is
+- Login still returns only `{accessToken, refreshToken}` (no `user` field) — deliberate drift vs `docs/API_CONTRACT.md`, resolved by the future files-module implementation, NOT this refactor
+- The compose `app` service mounts an anonymous `/app/node_modules` volume → docker dev needs an image rebuild after the dependency removals (`docker compose build app && docker compose up -d --renew-anon-volumes app`)
+- Step 6 needs a reachable DB; if host port 55432 is occupied by another stack, adjust the override or stop the conflicting stack first
+
+## Implementation checklist: Feature — files module (upload to MinIO + metadata in PostgreSQL)
+
+Task: implement the v1 file-upload feature specified by `docs/PRD.md` + `docs/API_CONTRACT.md` + `docs/DB_DESIGN.md` — authenticated uploads stored as MinIO objects (bucket `app-uploads`) with authoritative metadata in a new `file_uploads` table, time-limited presigned downloads (15 min), and soft delete. The docs were written for this exact feature and are the target contract — NO doc changes in this task. Per the docs, this task ALSO lands the response-envelope swap (PRD §7.4, API_CONTRACT §2) and the login/refresh `user`-field fix (API_CONTRACT §3.1/§3.4), both assigned to "implementation time". All steps 1–7 are implemented (see Outcomes) — this checklist is complete.
+
+**NOTE — the Architecture / Database schema / Routes / Authentication sections earlier in this file are STALE relative to HEAD (`30b8322`). The Grounding facts below + `docs/` are authoritative for this task.**
+
+### Grounding facts (verified against HEAD `30b8322`, 2026-10-13)
+
+| Area                  | Fact                                                                                                                                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repo state            | Refactor complete and committed (`30b8322`); working tree clean; modules = auth, health, organizations, users (+ common/prisma/config); auth surface = register / login / verify-token / refresh-token / change-password |
+| Login drift           | `auth.service.ts` `login()` / `refreshTokens()` return only `{accessToken, refreshToken}` — target adds `user` (API_CONTRACT §3.1/§3.4)                                                            |
+| Envelope today        | `ResponseTransformInterceptor` wraps `{statusCode, message:'Success', data, timestamp, path}`; `AllExceptionsFilter` errors `{statusCode, message, errors, timestamp, path}` — target per API_CONTRACT §2/§6 |
+| Guards                | Global Throttler (10 req/60s) → JwtAuthGuard (`@Public()` opt-out) → RolesGuard (`@Roles` + `user.role` from DB, `RoleName` enum SYSTEM/ADMIN/USER). Files routes get JWT automatically — no `@Public` |
+| ValidationPipe        | `whitelist` + `transform` + `enableImplicitConversion` enabled, but `forbidNonWhitelisted` is COMMENTED OUT in `main.ts` (contract needs unknown fields → `400 VALIDATION_ERROR`)                 |
+| Prisma / DB           | Schema has User (no `forgotPasswordRequest`) + Organization + `RoleName`; 7 migrations applied to `minio_file_db` on `postgres_db` (host port 5432, user `soerjo_pg`); NO `FileUpload` model yet   |
+| Dependencies          | NO `minio` installed (SDK latest: 8.0.7); multer 2.1.1 already bundled via `@nestjs/platform-express` (`FileInterceptor` works); `@types/multer` (2.3.0) needed for `Express.Multer.File` typing; bun NOT on host — `bun.lock` regen via `docker run ... oven/bun:1-alpine` |
+| Host MinIO            | A `minio` container (minio/minio:latest) runs on this host at `localhost:9100` (API) / `9101` (console) with CUSTOM root credentials (verified not the public default — obtain from parent; never commit them). Host port 9000 is taken by portainer |
+| Host ports            | 3000 / 3001 / 5432 / 6379 / 9000 held by other stacks; compose override maps app→3100, postgres→55432, redis→6380; legacy `nestjs-*` containers (incl. prometheus/grafana) still run from the monitoring-era compose definition |
+| Jest / CI             | `npm test` green via `jest.config.js` `testMatch: ['<rootDir>/src/**/*.spec.ts']` (1 suite today: request-logging middleware); CI jobs quality / test (`npm test`) / build — no live MinIO/DB in CI; specs must mock everything |
+| Env                   | `.env` absent on host (gitignored); DB credentials at `/tmp/.ce/database/.env` (subagent reads were permission-rejected — parent executes DB steps)                                               |
+
+### Locked decisions
+
+| Decision                    | Choice                                                                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Docs are the contract       | `docs/PRD.md`, `docs/API_CONTRACT.md`, `docs/DB_DESIGN.md` define the target verbatim — no doc changes; if reality diverges, document it explicitly, never silently  |
+| FileUpload model            | Exactly the DB_DESIGN §4 Prisma block (snake_case `@map`, `@db.Timestamptz(6)`, `uploader` relation `onDelete: Restrict`, `@@index([uploadedBy])`, `@@index([createdAt(sort: Desc)])`, `@@index([checksum])`, `@@map("file_uploads")`) + `fileUploads FileUpload[]` back-relation on User; ids are TEXT holding uuids (match `users.id`) |
+| Migration workflow          | `npx prisma migrate dev --create-only --name add_file_uploads` → hand-append the 2 CHECK constraints (`size_bytes > 0`, `status IN ('ACTIVE','DELETED')`) to the generated SQL (Prisma has no CHECK syntax — DB_DESIGN §4) → `npx prisma migrate dev` to apply + regenerate the client |
+| Migration DB target         | `minio_file_db` on `postgres_db` (host port 5432, user `soerjo_pg`), DATABASE_URL from `/tmp/.ce/database/.env` — parent runs the migration or supplies the URL inline (same split as the refactor's Step 6) |
+| Envelope swap               | INCLUDED — rewrite `response-transform.interceptor.ts` + `all-exceptions.filter.ts` in place: success `{success: true, data, message?}` (message only where the contract names one, e.g. change-password — e.g. a `@ResponseMessage()` decorator); error `{success: false, error: {code, message, details?}}` mapping the API_CONTRACT §6 catalog (ValidationPipe→`VALIDATION_ERROR` w/ details; 401→`UNAUTHORIZED`, message contains "expired"→`TOKEN_EXPIRED`; files NotFound→`FILE_NOT_FOUND`; PayloadTooLarge→`FILE_TOO_LARGE`; UnsupportedMediaType→`UNSUPPORTED_MEDIA_TYPE`; Throttler→`RATE_LIMITED`; MinIO failures→`MINIO_UNAVAILABLE`; fallback→`INTERNAL_ERROR`) |
+| login/refresh `user` field  | INCLUDED — `login()` / `refreshTokens()` add the `user` object to the token pair (resolves the documented drift)                                                     |
+| ValidationPipe              | Uncomment `forbidNonWhitelisted` in `main.ts` (contract: unknown fields → `400 VALIDATION_ERROR`)                                                                   |
+| Access control              | Owner + ADMIN (`RoleName`): `uploadedBy === user.id \|\| user.role === 'ADMIN'`; denial returns `404 FILE_NOT_FOUND` (the catalog has no 403 — avoids existence leak). List scope: USER → own uploads only, ADMIN → all |
+| Soft delete                 | `status` flag only (`ACTIVE`→`DELETED`); MinIO object + DB row retained; default list excludes `DELETED`; missing OR already-DELETED → `404 FILE_NOT_FOUND`          |
+| New dependencies            | `npm install minio` (^8.0.7) + `npm install -D @types/multer` (^2.3.0); regenerate `bun.lock` via `docker run --rm -v "$PWD":/app -w /app -u $(id -u):$(id -g) -e HOME=/tmp oven/bun:1-alpine bun install`, then re-run `npm ci` + `npx prisma generate` (refactor Step 5 pattern); `yarn.lock` untouched |
+| MinIO env vars              | `MINIO_ENDPOINT` (default `localhost`) · `MINIO_PORT` (default `9000`) · `MINIO_USE_SSL` (default `false`) · `MINIO_ACCESS_KEY` (required) · `MINIO_SECRET_KEY` (required) · `MINIO_BUCKET` (default `app-uploads`) — added to `env.validation.ts` + `.env.example` |
+| Bucket ensure               | `MinioService` `OnModuleInit`: `bucketExists(MINIO_BUCKET)` else `makeBucket` — idempotent, logged at startup                                                         |
+| Upload mechanics            | `FileInterceptor('file')` + memoryStorage, `limits.fileSize` = 25 MB → `413 FILE_TOO_LARGE`; MIME whitelist (PRD §4, 15 extensions ↔ MIME types — validate BOTH declared mimetype and file extension) → `415 UNSUPPORTED_MEDIA_TYPE`; sha256 hex via node `crypto`; objectKey `{userId}/{uuid()}-{sanitizedName}` with DB_DESIGN §6.1 sanitization; **MinIO put first → PG insert after; insert failure → best-effort compensating `removeObject`; MinIO failure → `500 MINIO_UNAVAILABLE`** (DB_DESIGN §6.7) |
+| List contract               | `page` default 1 · `limit` default 20 clamped to 100 (echo effective values) · `search` case-insensitive contains on `originalName` · `sort` `field:asc\|desc` on `createdAt\|originalName\|size` (size→`sizeBytes` in orderBy), default `createdAt:desc`, invalid → `400 VALIDATION_ERROR` · response `{items, total, page, limit}` |
+| Presigned URLs              | GET-method `presignedGetObject(bucket, objectKey, 900)` → `{url, expiresAt}` with `expiresAt` exactly +15 min, ISO 8601                                                                              |
+| Unit tests only             | Standing decision — specs (`*.spec.ts`) next to the module; mock `MinioService` + repository; no live MinIO/DB (CI-safe); no e2e                                                                      |
+| AGENTS.md top sections      | NOT refreshed (standing decision) — only this checklist section is added                                                                                             |
+
+### Open decisions (confirm before Step 3)
+
+| Decision            | Options                                                                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dev MinIO server    | RESOLVED (user decision, 2026-10-13): use the existing host `minio` container — `MINIO_ENDPOINT=localhost`, `MINIO_PORT=9100`, `MINIO_USE_SSL=false` (reflected in `.env.example` with placeholder credentials only; real creds are parent-held, never committed). The compose-service alternative was not taken — the feature's step list stays docker-free |
+
+### Files to create / modify
+
+**Create** — `src/modules/files/`: `files.module.ts` · `files.controller.ts` (Swagger `@ApiTags('Files')` + `@ApiBearerAuth()` per repo convention) · `files.service.ts` · `files.repository.ts` · `minio.service.ts` · `files.constants.ts` (MIME whitelist map, `MAX_FILE_SIZE_BYTES`, `PRESIGN_EXPIRY_SECONDS`) · `dto/list-files-query.dto.ts` · `utils/sanitize-filename.ts` + `file-upload.mapper.ts` (Prisma→API: `sizeBytes`→`size`) · spec files (`files.service.spec.ts` + util/mapper spec) · `prisma/migrations/<ts>_add_file_uploads/` (generated)
+
+**Modify** — `prisma/schema.prisma` (FileUpload + User back-relation) · `src/app.module.ts` (FilesModule) · `src/config/env.validation.ts` + `.env.example` (MINIO_*) · `src/common/interceptors/response-transform.interceptor.ts` + `src/common/filters/all-exceptions.filter.ts` (target envelope + error-code mapping) · `src/modules/auth/auth.service.ts` (login/refresh add `user`) · `src/main.ts` (uncomment `forbidNonWhitelisted`) · `package.json` + `package-lock.json` + `bun.lock` (minio, @types/multer)
+
+### Ordered steps (all pending)
+
+- [x] **Step 1 — Prisma: `FileUpload` model + migration**
+  Add the model to `prisma/schema.prisma` exactly per DB_DESIGN §4 (incl. the `fileUploads FileUpload[]` back-relation on User). Generate with `npx prisma migrate dev --create-only --name add_file_uploads`, hand-append the two CHECK constraints to the generated `migration.sql`, then apply with `npx prisma migrate dev` (regenerates the Prisma client). DB target per Locked decisions — parent executes (credentials) or supplies the inline `DATABASE_URL`.
+  Verify: `migration.sql` = `CREATE TABLE "file_uploads"` (TEXT ids, `object_key` UNIQUE, FK `uploaded_by` → `users(id)` ON DELETE RESTRICT) + 3 `CREATE INDEX` + the 2 CHECK constraints; `psql \d file_uploads` on `minio_file_db` confirms table/indexes/CHECKs; `npx prisma migrate status` → all applied; `npx tsc --noEmit` clean with the regenerated client.
+  Outcome: model added to `prisma/schema.prisma` exactly per DB_DESIGN §4 (`@@map("file_uploads")`, snake_case `@map`s, `@db.Timestamptz(6)`, `uploader` relation `onDelete: Restrict`, 3 `@@index` entries incl. `createdAt(sort: Desc)`) + `fileUploads FileUpload[]` back-relation on User; `npx prisma validate` clean. Execution note: `DATABASE_URL` (`postgresql://soerjo_pg:***@localhost:5432/minio_file_db`) was pre-exported in the environment by the parent, so the subagent ran the migration directly per user instruction (no parent execution needed). Workflow as locked: `--create-only` generated `prisma/migrations/20261013025218_add_file_uploads/migration.sql` (CREATE TABLE with TEXT ids, `object_key` UNIQUE, FK `uploaded_by` → `users(id)` ON DELETE RESTRICT ON UPDATE CASCADE, UNIQUE index + 3 indexes incl. `created_at DESC`), the 2 CHECK constraints were hand-appended (`file_uploads_size_bytes_check` — `size_bytes > 0`; `file_uploads_status_check` — `status IN ('ACTIVE','DELETED')`) under an explicit `-- AddCheckConstraint` comment, then `npx prisma migrate dev` applied it and regenerated the Prisma client (v6.19.3). Verified: `npx prisma migrate status` → "8 migrations found... Database schema is up to date!"; `psql \d file_uploads` on `minio_file_db` shows all 11 columns, 5 indexes (pkey, `object_key` UNIQUE, `uploaded_by`, `created_at DESC`, `checksum`), both CHECK constraints, and the RESTRICT FK; `npx tsc --noEmit` clean with the regenerated client.
+
+- [x] **Step 2 — files module skeleton + envelope/auth alignment (JWT, ownership)**
+  Create the 3-layer skeleton (`files.module.ts` / `files.controller.ts` with `@Controller('files')` / `files.service.ts` / `files.repository.ts` + `dto/` dir) and register `FilesModule` in `app.module.ts`. Files routes are JWT-protected automatically by the global `JwtAuthGuard` (no `@Public`); implement the ownership helper (`uploadedBy === user.id || user.role === 'ADMIN'`, denial → `FILE_NOT_FOUND`). Envelope swap + error-code mapping per Locked decisions (rewrite interceptor + filter in place); `auth.service.ts` login/refresh add `user`; uncomment `forbidNonWhitelisted` in `main.ts`.
+  Verify: `npx tsc --noEmit` + `npm run build` + check-only eslint clean; `npm test` still green; optional early runtime curl (needs `.env` + DB): `GET /api/health` → `{success: true, data: {...}}`, bogus path → `{success: false, error: {code: ...}}`.
+  Outcome: all Step 2 deliverables implemented — `src/modules/files/` skeleton (`files.module.ts` / `files.controller.ts` with `@ApiTags('Files')` + `@ApiBearerAuth()` + `@Controller('files')` / `files.service.ts` / `files.repository.ts`) + `FilesModule` registered in `app.module.ts` (`PrismaModule` is `@Global`, so no extra module imports; the `dto/` dir materializes in Steps 4–5 — empty dirs aren't git-tracked); ownership helper `FilesService.ensureOwnershipOrAdmin(file, user)` (`uploadedBy === user.id || user.role === ADMIN` via `$Enums.RoleName`; denial → `AppError` 404 `FILE_NOT_FOUND`). Envelope swap in place, with two new common primitives as the code-carrying mechanism: `src/common/errors/app-error.ts` (`HttpException` subclass carrying `code` + optional `details`) and `src/common/decorators/response-message.decorator.ts` (`@ResponseMessage()`). `response-transform.interceptor.ts` rewritten to `{success: true, data: data ?? null, message?}` (message only via the decorator — applied to change-password per contract §3.5); `all-exceptions.filter.ts` rewritten to `{success: false, error: {code, message, details?}}` with the §6-catalog mapping (400→`VALIDATION_ERROR` w/ details; 401→`UNAUTHORIZED`, `/expired/i` message→`TOKEN_EXPIRED`; 403→`FORBIDDEN` and 404→`NOT_FOUND` for non-`AppError` exceptions — codes beyond the catalog for template leftovers; files' 404s go through `AppError`→`FILE_NOT_FOUND`; 413→`FILE_TOO_LARGE`; 415→`UNSUPPORTED_MEDIA_TYPE`; 429→`RATE_LIMITED`; fallback→`INTERNAL_ERROR`). `auth.service.ts`: `login()` now returns `{accessToken, refreshToken, user: payload}` (refreshTokens inherits via `login`) and `changePassword()` returns void (message moved to the decorator). `main.ts`: `forbidNonWhitelisted: true` uncommented + interceptor constructed with `new Reflector()`. Two lint fixes during the step: prettier line-breaking on the interceptor class declaration, and `resolveCode(status: HttpStatus, ...)` (was `number` — `no-unsafe-enum-comparison`). Verified: `npx tsc --noEmit` clean, check-only eslint exit 0, `npm run build` OK (`dist/modules/files` emitted), `npm test` 5/5 green. Parent verification confirms all four headline deliverables (files skeleton present, envelope `success: true` in the interceptor, `forbidNonWhitelisted` uncommented, login/refresh returning the `user` field) with lint=0 / tsc=0 / build=0 / test=0. The optional early runtime curl was attempted but failed environmentally — the smoke process's log write to `/tmp` was permission-blocked on this host (not a code issue, per parent); runtime envelope verification is deferred to Step 7's full smoke.
+
+- [x] **Step 3 — MinIO client integration (SDK, env config, ensure bucket)**
+  `npm install minio && npm install -D @types/multer`; regenerate `bun.lock` via the docker oven/bun pattern, then `npm ci` + `npx prisma generate` to restore the npm-managed `node_modules`. Implement `minio.service.ts`: Client built from `ConfigService` (`endPoint`/`port`/`useSSL`/`accessKey`/`secretKey`), `ensureBucket()` on `OnModuleInit` (`bucketExists` → `makeBucket`), plus `putObject` / `presignedGetObject` / `removeObject` wrappers for Steps 4-5. Add the 6 `MINIO_*` vars to `env.validation.ts` + `.env.example`. Dev target per Open decisions (default: existing host container, `MINIO_PORT=9100`).
+  Verify: `git diff package.json` shows exactly `minio` + `@types/multer`; `npm ci` OK; tsc/build clean; optional runtime boot with valid `.env` logs the bucket check; unit-testable without a live server (mocked in Step 6).
+  Outcome: `npm install minio` (^8.0.7) + `npm install -D @types/multer` (^2.3.0) — 27 packages added; `git diff package.json` shows exactly the 2 additions. Deviation handled twice: npm auto-synced `yarn.lock` on BOTH `npm install` AND the later `npm ci` (npm keeps yarn.lock in sync whenever it exists) — restored to HEAD after each, 0 diff at the end. `bun.lock` regenerated via the docker oven/bun pattern (with `-u`/`-e HOME` ownership flags); bun-managed `node_modules` restored afterwards via `npm ci` (830 packages) + `npx prisma generate`. Implemented `src/modules/files/minio.service.ts`: `Minio.Client` from `ConfigService` (`endPoint`, `port` via `Number()`, `useSSL` via `=== 'true'`, `accessKey`, `secretKey`), `bucket` from `MINIO_BUCKET` + a `bucketName` getter (Step 4's metadata row needs the bucket), `onModuleInit` → `ensureBucket()` (`bucketExists` → `makeBucket`, logged on both paths; errors propagate — fail-fast when storage is unreachable), and the three bucket-scoped wrappers for Steps 4–5: `putObject(objectKey, body, size, contentType)` (Content-Type metaData), `presignedGetObject(objectKey, expirySeconds)`, `removeObject(objectKey)`. `MinioService` registered in `FilesModule` providers. The 6 `MINIO_*` vars added to `env.validation.ts` (`MINIO_ENDPOINT` default `localhost` · `MINIO_PORT` `@IsPort` default `9000` · `MINIO_USE_SSL` `@IsIn(['true','false'])` default `'false'` · `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY` `@IsString @IsNotEmpty` (required) · `MINIO_BUCKET` default `app-uploads`) and to `.env.example` with the resolved dev target (`localhost:9100`, `MINIO_USE_SSL=false`) and PLACEHOLDER credentials only — no real secrets. Verified: `npm ci` OK; `npx tsc --noEmit` clean (`import * as Minio from 'minio'` resolves the 8.0.7 types under nodenext); `npm run build` OK (`dist/modules/files/minio.service.*` emitted); check-only eslint exit 0; `npm test` 5/5 green. The optional runtime bucket-check boot was skipped — it requires the real host-minio credentials (parent-held, custom, not the public default); covered by Step 7's parent-supplied-`.env` runtime smoke.
+
+- [x] **Step 4 — Upload endpoint (`POST /files/upload`) — multipart, validation, sha256, MinIO-first + compensating delete**
+  `FileInterceptor('file')` + memoryStorage + `limits.fileSize` 25 MB (multer trip → `413 FILE_TOO_LARGE`); MIME whitelist from `files.constants.ts` (declared mimetype AND extension) → `415 UNSUPPORTED_MEDIA_TYPE`; sha256 hex via node `crypto`; `sanitizeFilename()` pure util per DB_DESIGN §6.1; objectKey `{userId}/{uuid()}-{sanitizedName}`; order = MinIO `putObject` first → repository `create`; on insert failure → best-effort compensating `removeObject` then rethrow; MinIO put failure → `500 MINIO_UNAVAILABLE`. Response `201` data = mapped FileUpload (`sizeBytes`→`size`).
+  Verify: tsc/build/eslint clean; optional runtime: upload a PDF → `201` envelope with all 11 API_CONTRACT §5 fields; `.exe` → `415` envelope; >25 MB → `413` envelope.
+  Outcome: `files.constants.ts` created (`MAX_FILE_SIZE_BYTES` = 25 \* 1024 \* 1024, `PRESIGN_EXPIRY_SECONDS` = 900 for Step 5, `MIME_WHITELIST` — the PRD §4 15-extension→MIME map; prettier normalized the two long office MIME values to single-line overflow). `utils/sanitize-filename.ts` pure fn per DB_DESIGN §6.1 (trim → strip `/`+`\` separators → replace chars outside `[a-zA-Z0-9._-]` with `-` → strip leading dots → truncate to 80 chars preserving the extension). `utils/file-upload.mapper.ts` (`FileUploadDto` + `toFileUploadDto()` — `sizeBytes`→`size`; timestamps stay `Date`, JSON-serialized to ISO 8601). `FilesRepository.create()` added (Prisma `XOR<FileUploadCreateInput, FileUploadUncheckedCreateInput>`, returns the full row). `FilesService.upload(file, user)`: missing file → 400 `VALIDATION_ERROR` ('File is required'); `size > 25 MB` → 413 `FILE_TOO_LARGE` ('File exceeds the 25 MB limit' — service-side guard doubles the multer limit so Step 6 can unit-test without multer); extension↔mimetype whitelist pairing (BOTH must match the PRD §4 map) → 415 `UNSUPPORTED_MEDIA_TYPE` ('MIME type X is not allowed'); sha256 hex via node `crypto`; objectKey `{userId}/{uuid()}-{sanitizedOriginalName}`; **MinIO `putObject` first** (failure → logged + 500 `MINIO_UNAVAILABLE`), then `repository.create` (bucket from `MinioService.bucketName`, status defaults `ACTIVE`); insert failure → best-effort compensating `removeObject` (swallows + logs its own failure) with the original error rethrown (DB_DESIGN §6.7). `FilesController` `POST /files/upload` with `FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_FILE_SIZE_BYTES } })` + Swagger `@ApiConsumes('multipart/form-data')` + binary `@ApiBody` — JWT via the global guard. Verified: `npx tsc --noEmit` clean (`Express.Multer.File` resolves via the `multer` import chain); check-only eslint exit 0; `npm run build` OK (files module + `utils/` emitted); `npm test` 5/5 green. The optional runtime upload smoke (PDF 201 / `.exe` 415 / oversize 413) was skipped — needs live MinIO credentials (parent-held); covered by Step 7's parent-supplied-`.env` smoke. No `/tmp` usage (per user instruction).
+
+- [x] **Step 5 — List / detail / presigned URL / delete endpoints**
+  `GET /files` with `list-files-query.dto.ts` (page/limit-clamp-100/search/sort per Locked decisions; invalid sort → `400 VALIDATION_ERROR`; scope USER-own / ADMIN-all; `DELETED` excluded; response `{items, total, page, limit}` with effective values). `GET /files/:id` (owner+ADMIN else 404; missing OR DELETED → `404 FILE_NOT_FOUND`). `GET /files/:id/url` (`presignedGetObject` 900 s → `{url, expiresAt}` +15 min ISO). `DELETE /files/:id` (guarded update `ACTIVE`→`DELETED`; repeat/missing → `404`; MinIO object NOT deleted; `200` + updated FileUpload).
+  Verify: tsc/build/eslint clean; optional runtime curls per API_CONTRACT §4.2–§4.5 incl. error examples (bad sort → 400, unknown id → 404, presigned URL downloads the actual object bytes).
+  Outcome: `dto/list-files-query.dto.ts` (page `@IsInt @Min(1)` default 1 · limit `@IsInt @Min(1)` default 20 — clamped, NOT rejected, above 100 · optional `search` string · optional `sort` string with the format enforced in the service; `@ApiPropertyOptional` per repo convention); `MAX_LIST_LIMIT = 100` added to `files.constants.ts`; `FileUploadListDto` (`{items,total,page,limit}`) added to the mapper. Repository: `findById` (null for missing — the service decides 404), `findMany({where,orderBy,skip,take})`, `count(where)`, and `softDelete(id)` — a guarded `updateMany({id, status:'ACTIVE'} → 'DELETED')` returning the count (0 covers missing AND already-DELETED, incl. the concurrent-repeat case). Service: `list(query, user)` builds `where {status:'ACTIVE'}` + scope (non-ADMIN gets `uploadedBy = user.id`), optional `originalName {contains, mode:'insensitive'}`, orderBy via `parseSort` (default `createdAt:desc`; fields `createdAt`/`originalName`/`size`→`sizeBytes`; anything else → 400 `VALIDATION_ERROR` 'Invalid sort parameter' + details `['sort must be <createdAt|originalName|size>:<asc|desc>']` exactly per the contract sample), `Promise.all` findMany+count, and echoes the effective page + clamped limit; `getById` / `getPresignedUrl` / `remove` share `getAccessibleActiveFile` (missing OR DELETED → 404 `FILE_NOT_FOUND`, then ownership via `ensureOwnershipOrAdmin` → 404 on denial); `getPresignedUrl` — `presignedGetObject(objectKey, PRESIGN_EXPIRY_SECONDS)` with `expiresAt = issuedAt + 900s` (ISO via Date serialization; presign failure → logged + 500 `MINIO_UNAVAILABLE`); `remove` — guarded softDelete (count 0 → 404), refetch, returns the updated FileUpload with `status: DELETED`; the **MinIO object is NOT deleted** per contract. Controller: `GET /files` (`@Query` DTO validated by the global pipe — unknown query fields now 400 via `forbidNonWhitelisted`), `GET /files/:id`, `GET /files/:id/url`, `DELETE /files/:id` (Nest default 200); JWT via the global guard; prettier was a no-op on all files-module files. Verified: `npx tsc --noEmit` clean; check-only eslint exit 0; `npm run build` OK (`dto/` emitted); `npm test` 5/5 green. The optional runtime curls (§4.2–§4.5) were skipped — needs live MinIO + an authed user (parent-held creds); covered by Step 7's smoke. No `/tmp` usage.
+
+- [x] **Step 6 — Unit tests (specs next to the module; everything mocked — CI-safe)**
+  `files.service.spec.ts` (mock `MinioService` + `FilesRepository`): upload happy path (objectKey format, checksum, row fields); 415 non-whitelisted MIME/extension; 413 oversize; MinIO put failure → `MINIO_UNAVAILABLE`; PG insert failure → compensating `removeObject` called; list scope USER vs ADMIN; `DELETED` exclusion; search/sort/pagination query building + limit clamp; detail 404 (missing / DELETED / non-owner non-ADMIN); presigned URL + `expiresAt` exactly +15 min; soft delete + repeat-delete 404. Plus pure-function specs for `sanitizeFilename` (sanitization, traversal stripping, 80-char truncation preserving extension) and the mapper (`sizeBytes`→`size`).
+  Verify: `npm test` — all suites green (existing middleware spec + new specs); check-only eslint on the spec files clean; `npx tsc --noEmit` clean.
+  Outcome: three specs created — `src/modules/files/files.service.spec.ts` (27 tests: upload happy path asserting the objectKey format `{userId}/{uuid}-Invoice-42-EU.pdf`, the sha256 of a known payload ('hello' → hardcoded digest), MinIO-first call order + row fields + mapped DTO; 415 for a non-whitelisted ext+mimetype AND for a whitelisted extension with a mismatched mimetype; 413 oversize; 400 `VALIDATION_ERROR` for a missing file; MinIO put failure → `MINIO_UNAVAILABLE` with no DB/compensating calls; PG insert failure → compensating `removeObject` with the ORIGINAL error rethrown; compensating-remove failure swallowed; list scope USER-own vs ADMIN-all `where` equality; insensitive contains search; limit clamp to 100 + effective echo; skip/take from page+limit; all four valid sort mappings incl. `size`→`sizeBytes`; default `createdAt:desc`; 5 invalid sorts → `VALIDATION_ERROR`; detail owner/ADMIN/missing/DELETED/non-owner → `FILE_NOT_FOUND`; presigned URL with `expiresAt` bounded to [before,after]+15 min and `presignedGetObject` called with (objectKey, 900); presign failure → `MINIO_UNAVAILABLE`; DELETED → no presign; soft-delete happy path (MinIO untouched), repeat-delete 404, guarded-update count 0 → 404) · `utils/sanitize-filename.spec.ts` (8 tests: charset replacement, traversal stripping, leading-dot stripping, whitespace trim, allowed-chars passthrough, 80-char truncation preserving the extension, extension-less truncation, invalid/empty degradation) · `utils/file-upload.mapper.spec.ts` (1 test: full 11-field mapping, `sizeBytes`→`size`). Mocks via `as unknown as jest.Mocked<FilesRepository/MinioService>` — fully typed (no `any` leakage into type-checked lint), direct `new FilesService(...)` construction, `jest.resetAllMocks()` per test. Two infra fixes required during the step: (1) **`files.service.ts` type decoupling** — `upload()`'s param changed from the global `Express.Multer.File` to a new exported `UploadedFile` interface (`{originalname, mimetype, size, buffer}`): tsconfig's `types: ["jest","node"]` restricts @types auto-inclusion, so the spec's import closure never loads `@types/multer` and the global namespace failed under ts-jest; the controller (which imports multer anyway) keeps `Express.Multer.File` and passes it structurally; (2) **eslint specs override** — added a `files: ['src/**/*.spec.ts', 'test/**/*.spec.ts']` block to `eslint.config.mjs` turning OFF `@typescript-eslint/unbound-method` for spec files only — jest matchers (`expect(mock.method)`) take unbound method references by design (the rule's `.mock` property-access exemption is why only the `expect(fn)` lines flagged); this is the typescript-eslint-documented jest setup; production linting unchanged. One test-data fix: the upload happy-path mock initially returned a canned row (fixture objectKey ≠ generated objectKey) — `create` now echoes its input via `mockImplementation` + `Promise.resolve` (also satisfies `require-await`). Verified: `npm test` → 4 suites, 41/41 passed (middleware 5 + service 27 + sanitize 8 + mapper 1); check-only eslint exit 0; `npx tsc --noEmit` clean. No `/tmp` usage.
+
+- [x] **Step 7 — Full verification gate**
+  In order: `npm run lint` (bakes `--fix`; also CI's check-only `npx eslint "src/**/*.ts" "test/**/*.ts"` → exit 0) · `npx tsc --noEmit` · `npm run build` · `npm test` (all suites). Old-envelope sweep: `rg -n 'statusCode' src/common/interceptors src/common/filters` → 0 hits. Optional runtime smoke (needs parent-supplied `.env`: DATABASE_URL → `minio_file_db`@localhost:5432, MINIO_* → host minio @9100, JWT secrets; app on a free port e.g. 3100): register → login (envelope + `user` field) → upload PDF (201, 11 fields) → list (`{items,total,page,limit}`) → detail → presigned URL downloads bytes → DELETE (status DELETED) → re-DELETE → 404 → `.exe` 415 → oversize 413 → bogus route 404 error envelope. CI needs no workflow changes — the `npm test` job picks up the new specs automatically.
+  Outcome (parent-verified; no-code status update by the subagent): the full gate was run externally by the parent agent — `npm run lint` exit 0 · `npx tsc --noEmit` exit 0 · `npm run build` exit 0 · `npm test` 41/41 passed (4 suites). Live runtime smoke: the parent ran the app on PORT=3110 with a valid `.env` and verified the complete upload round-trip — register (auto-created organization), login (returns the `user` field), `POST /files/upload` → 201 with all contract fields, the object confirmed present in the MinIO `app-uploads` bucket via `mc ls`, the metadata row confirmed in PG `file_uploads`, a presigned GET URL downloading the exact original bytes, the list endpoint OK, and DELETE soft-deleting the file followed by 404 `FILE_NOT_FOUND`. The error-path curls (`.exe` 415 / oversize 413 / bogus-route 404 envelope) and the old-envelope `rg statusCode` sweep were not part of the parent's report — those behaviors are covered by the 41 unit tests (service-level 415/413/404 paths) and the Step 2 envelope rewrite respectively, and the runtime error-path curls remain optional per the step text. Checklist complete — final state: `FileUpload` model + migration (8 migrations on `minio_file_db`), MinIO integration with startup bucket ensure, files module (upload with MinIO-first + compensating delete, list/detail/presigned-url/soft-delete, owner+ADMIN access), response-envelope swap + login/refresh `user` field, 41 CI-safe unit tests, and live end-to-end verification against MinIO + PostgreSQL.
+
+### Risks / notes
+
+- Step 1 DB access: subagent reads of `/tmp/.ce/database/.env` were permission-rejected — the migration needs parent execution or a parent-supplied inline `DATABASE_URL` (same split as the refactor's Step 6)
+- The host `minio` container uses CUSTOM root credentials (verified not the public default) — obtain from parent for runtime smoke; never write them into `.env.example`, docs, or commits
+- Host ports 3000 / 3001 / 5432 / 6379 / 9000 are held by other stacks (portainer owns 9000); the external minio is at 9100/9101; the compose override maps app→3100 / postgres→55432 / redis→6380 — pick free ports for runtime smoke
+- Legacy `nestjs-*` containers (app/prometheus/grafana/postgres/redis) still run from the monitoring-era compose definition — a fresh `docker compose up` recreates the stack WITHOUT prometheus/grafana (removed from the base file); don't be confused by the stale running containers
+- bun not on host — after the dockerized `bun install`, re-run `npm ci` + `npx prisma generate` (bun-managed `node_modules` blocks postinstalls → no generated Prisma client → tsc fails)
+- The envelope swap changes EVERY endpoint's response shape (incl. `/api/health` and auth) — existing consumers must adapt; the docs are the contract; the e2e drift (`test/app.e2e-spec.ts` doesn't apply interceptor/filter; not CI-gated) remains, out of scope
+- memoryStorage buffers whole files (≤25 MB) in RAM per request — acceptable for v1; watch upload concurrency
+- The global throttle (10 req/60s) applies to uploads too → `429 RATE_LIMITED` (API_CONTRACT §1/§6)
+- `uploaded_by` is ON DELETE RESTRICT — deleting a user who has uploads fails with an FK error until their files are handled (DB_DESIGN §6.6; per-user cleanup is out of scope)
+- objectKey uniqueness never relies on the sanitized name (uuid prefix; the DB UNIQUE on `object_key` is defensive only)
+- Docs are the target contract — if implementation reality diverges, the docs win or the divergence is documented explicitly; never silently drift
+
+## Deployment
+
+Production deploy config (added 2026-10-13): `docker-compose.prod.yml` — ONE service (`app`), no postgres/minio services (external, shared with the other stacks on this host). Invoked with `-f`, so the dev `docker-compose.override.yml` does NOT merge in.
+
+| Piece          | Detail                                                                                                                                                                                              |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service        | `app`: `container_name: minio-file-service`, `build` from the production multi-stage `Dockerfile` (bun), `restart: unless-stopped`, ports `3110:3000`                                                |
+| Container port | `PORT=3000` in the container (main.ts reads `process.env.PORT ?? 3000`; the Dockerfile production stage `EXPOSE`s 3000) — host 3110 → container 3000. Separate from the DEV compose app (override host port 3100) |
+| Network        | `internal_net` declared `external: true` — the network must pre-exist (`docker network create internal_net`) with the `postgres_db` and `minio` containers attached; env hosts resolve over it (`postgres_db:5432`, `minio:9000` — CONTAINER ports, NOT the host-mapped 5432/9100). Verified: `internal_net` already exists on this host |
+| Secrets        | `${POSTGRES_PASSWORD}`, `${MINIO_SECRET_KEY}`, `${JWT_ACCESS_SECRET}`, `${JWT_REFRESH_SECRET}` interpolate from `.env.prod` (gitignored — `.gitignore` gains `.env.prod`; `.env.prod.example` is committed with placeholders; the REAL `.env.prod` is parent-provided, never committed). `MINIO_ACCESS_KEY=soerjo_minio` is non-secret and inline |
+| Deploy         | `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build`                                                                                                                        |
+| Validate       | `docker compose -f docker-compose.prod.yml --env-file .env.prod config` — plain `config` WITHOUT `--env-file` still parses but blanks the variables with warnings ("The POSTGRES_PASSWORD variable is not set. Defaulting to a blank string."); always deploy with `--env-file .env.prod` |
+
+Supporting changes baked in with this config:
+
+- **`Dockerfile` builder stage now runs `bunx prisma generate`** (after `COPY . .`, before `bun run build`) — bun blocks prisma's postinstall (`bun install` → "Blocked 2 postinstalls"), so without this the baked `node_modules` lacks the generated Prisma client and the app crashes at import time (the same infra fix the monitoring checklist had to apply manually inside the container, now baked into the image)
+- **Pre-existing `.dockerignore` (verified, no change needed)** — it already excludes `node_modules` (so a host `node_modules` cannot clobber the builder's bun-installed one after `COPY . .`) and all dotfiles via `.*` (so host `.env`/`.env.prod` secrets are never baked into the image); `logs`/`dist`/`coverage`/`.git` are excluded as well
+- `.gitignore` gains `.env.prod`
+
+Status: config-validated only — `docker compose -f docker-compose.prod.yml --env-file .env.prod config` parsed cleanly with a dummy `.env.prod` (then the dummy was removed; the real one is created by the parent at deploy time). `docker compose up` was NOT run per instruction. NOTE: host port 3110 is currently held by the Step-7 smoke process (host pid, not a container) — it must be stopped before the first deploy or the port binding will fail.
+
+## Seeding
+
+Default-user seed (`prisma/seed.ts`, added 2026-10-13): upserts two internal default users, each inside its own organization (`User.organizationId` is required — the organizations table may be empty), following the `register()` interactive-transaction pattern (org upsert by slug → user upsert by email). bcryptjs hash, 10 rounds, hashed BEFORE the upsert; the `update` branch resets password/firstName/lastName/role, so re-running is idempotent (existing organizations are kept). The default credentials are intentionally committed for this standalone internal app and documented in README §"Default users".
+
+| Piece          | Detail                                                                                                                                                                                              |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Users          | `admin@minio.local` / `Admin#12345` — role `ADMIN`, name "Admin Minio", org slug `admin` · `soerjo@minio.local` / `Soerjo#12345` — role `USER`, name "Soerjo" (no lastName), org slug `soerjo`          |
+| Organizations  | One per user: name `Organization of <email>` (register pattern), slug = email prefix (`admin`, `soerjo`); upserted by slug so re-runs keep existing rows                                                |
+| Runner         | tsx is NOT a project dependency → the seed runs on bun (bun 1.4.3 available on this host at `~/.bun/bin/bun`; previously bun was docker-only). package.json: `"prisma": { "seed": "bun prisma/seed.ts" }`, scripts `"bun:seed": "bun prisma/seed.ts"` and `"db:seed": "prisma db seed"` (spawns the configured seed command) |
+| DB target      | PrismaClient auto-loads the repo `.env` (parent-provided, gitignored) — `DATABASE_URL=postgresql://soerjo_pg:***@localhost:5432/minio_file_db` (host-runnable; postgres_db's published port). The parent-quoted `postgres_db.internal_net:5432` form is for running from a container attached to `internal_net` — same database either way |
+| Verification  | `npm run db:seed` → "Seeded admin@minio.local (role=ADMIN) into organization \"admin\"" + "Seeded soerjo@minio.local (role=USER) …" — run TWICE, idempotent. psql on `minio_file_db` confirms: both users present with correct role/firstName/lastName and bcrypt `$2b$` hash prefixes, orgs `admin` + `soerjo` present; `npx tsc --noEmit` clean (seed.ts is typechecked — tsconfig has no include restriction). The DB also holds unrelated smoke-era users (`c1@dina.local`, `smoke-test@dina.local`, `test-user@dina.local`) from earlier parent verification runs |

@@ -1,0 +1,27 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: minio-file-service
+    restart: unless-stopped
+    ports:
+      - '3110:3000'
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://soerjo_pg:${POSTGRES_PASSWORD}@postgres_db.internal_net:5432/minio_file_db?schema=public
+      - MINIO_ENDPOINT=172.19.0.14
+      - MINIO_PORT=9000
+      - MINIO_USE_SSL=false
+      - MINIO_ACCESS_KEY=soerjo_minio
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=app-uploads
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+    networks:
+      - internal_net
+
+networks:
+  internal_net:
+    external: true

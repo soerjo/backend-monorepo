@@ -18,6 +18,8 @@ import { MailModule } from '../mail/mail.module.js';
 import { SecurityPoliciesModule } from '../security-policies/security-policies.module.js';
 import { AuditModule } from '../audit/audit.module.js';
 import { MfaModule } from '../mfa/mfa.module.js';
+import { PasswordPolicyService } from './password-policy.service.js';
+import { AccountLockoutService } from './account-lockout.service.js';
 import { JWT_ISSUER } from './auth.constants.js';
 import type { JwtModuleOptions } from '@nestjs/jwt';
 
@@ -60,7 +62,15 @@ import type { JwtModuleOptions } from '@nestjs/jwt';
     JwtKeysService,
     LocalStrategy,
     JwtStrategy,
+    PasswordPolicyService,
+    AccountLockoutService,
   ],
-  exports: [AuthService, AuthTokensRepository, JwtKeysService],
+  exports: [
+    AuthService,
+    AuthTokensRepository,
+    JwtKeysService,
+    PasswordPolicyService,
+    AccountLockoutService,
+  ],
 })
 export class AuthModule {}

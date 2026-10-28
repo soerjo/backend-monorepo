@@ -66,13 +66,13 @@ async function bootstrap() {
     app.enableCors();
   }
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3005);
   // const appUrl = await app.getUrl();
   winstonLogger.info(
-    `Application URL: http://localhost:${process.env.PORT ?? 3000}/api`,
+    `Application URL: http://localhost:${process.env.PORT ?? 3005}/api`,
   );
   winstonLogger.info(
-    `Swagger URL: http://localhost:${process.env.PORT ?? 3000}/docs`,
+    `Swagger URL: http://localhost:${process.env.PORT ?? 3005}/docs`,
   );
 }
 bootstrap().catch((err) => {

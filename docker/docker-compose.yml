@@ -44,6 +44,22 @@ services:
       - monorepo-net
 
   # -------------------------------------------------------------
+  # Redis Dashboard: RedisInsight
+  # -------------------------------------------------------------
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: monorepo-redisinsight
+    restart: unless-stopped
+    depends_on:
+      - redis
+    ports:
+      - "${REDISINSIGHT_PORT:-5540}:5540"
+    volumes:
+      - redisinsight_data:/data
+    networks:
+      - monorepo-net
+
+  # -------------------------------------------------------------
   # Event Streaming: Zookeeper & Apache Kafka
   # -------------------------------------------------------------
   zookeeper:
@@ -76,6 +92,25 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    networks:
+      - monorepo-net
+
+  # -------------------------------------------------------------
+  # Kafka Dashboard: Kafbat UI (Community fork of Kafka-UI)
+  # -------------------------------------------------------------
+  kafbat-ui:
+    image: ghcr.io/kafbat/kafka-ui:latest
+    container_name: monorepo-kafbat-ui
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    ports:
+      - "${KAFBAT_UI_PORT:-8080}:8080"
+    environment:
+      DYNAMIC_CONFIG_ENABLED: 'true'
+      KAFKA_CLUSTERS_0_NAME: local-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     networks:
       - monorepo-net
 
@@ -115,7 +150,7 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
-
+  redisinsight_data:
 networks:
   monorepo-net:
     driver: bridge

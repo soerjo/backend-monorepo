@@ -30,6 +30,8 @@ import { WebhookDispatcherService } from '../clients/webhook-dispatcher.service.
 import type { RegisterDto } from './dto/register.dto.js';
 import { AuditService } from '../audit/audit.service.js';
 import { SecurityPoliciesService } from '../security-policies/security-policies.service.js';
+import { OutboxService } from '../outbox/outbox.service.js';
+import { UMS_TOPICS } from '@workspace/events';
 
 export interface RequestMeta {
   userAgent?: string | null;
@@ -64,6 +66,7 @@ export class AuthService {
     @Inject(forwardRef(() => WebhookDispatcherService))
     private readonly webhookDispatcherService: WebhookDispatcherService,
     private readonly securityPoliciesService: SecurityPoliciesService,
+    private readonly outboxService: OutboxService,
   ) {}
 
   public get accessTokenTtlSeconds(): number {
@@ -151,7 +154,7 @@ export class AuthService {
    * Signs a stateless RS256 access token carrying roles/orgs/perms as claims so
    * downstream services can authorize without calling UMS.
    */
-  buildAccessToken(user: AuthUser): string {
+  buildAccessToken(user: AuthUser, sessionId?: string): string {
     return this.jwtService.sign({
       sub: user.id,
       email: user.email,
@@ -159,6 +162,7 @@ export class AuthService {
       roles: user.roles,
       orgs: user.orgs,
       perms: user.perms,
+      sid: sessionId,
       azp: JWT_AZP,
     });
   }
@@ -167,7 +171,12 @@ export class AuthService {
     userId: string,
     family: string,
     meta: RequestMeta,
-  ): Promise<{ refreshToken: string; refreshHash: string; expiresAt: Date }> {
+  ): Promise<{
+    sessionId: string;
+    refreshToken: string;
+    refreshHash: string;
+    expiresAt: Date;
+  }> {
     const policies = await this.securityPoliciesService.getPolicies();
 
     // Enforce max concurrent sessions
@@ -193,7 +202,7 @@ export class AuthService {
       Date.now() + policies.refreshTokenTtlDays * 24 * 60 * 60 * 1000,
     );
 
-    await this.prisma.session.create({
+    const created = await this.prisma.session.create({
       data: {
         userId,
         refreshHash,
@@ -204,7 +213,7 @@ export class AuthService {
       },
     });
 
-    return { refreshToken, refreshHash, expiresAt };
+    return { sessionId: created.id, refreshToken, refreshHash, expiresAt };
   }
 
   async validateUser(
@@ -266,11 +275,26 @@ export class AuthService {
       },
     });
 
+    await this.outboxService.emit('User', user.id, UMS_TOPICS.USER_CREATED, {
+      eventId: randomUUID(),
+      occurredAt: new Date().toISOString(),
+      sourceService: 'ums-service',
+      eventType: 'USER_CREATED',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        roles: [],
+        orgs: [],
+        status: user.status,
+      },
+    });
+
     return this.toPublicUser(user);
   }
 
   async login(user: AuthUser, meta: RequestMeta = {}): Promise<IssuedTokens> {
-    const { refreshToken } = await this.createSession(
+    const { sessionId, refreshToken } = await this.createSession(
       user.id,
       randomUUID(),
       meta,
@@ -284,7 +308,7 @@ export class AuthService {
     });
 
     return {
-      accessToken: this.buildAccessToken(user),
+      accessToken: this.buildAccessToken(user, sessionId),
       refreshToken,
       user,
     };
@@ -325,13 +349,13 @@ export class AuthService {
       throw new UnauthorizedException('User is not active');
     }
     const authUser = await this.toAuthUser(user);
-    const { refreshToken } = await this.createSession(
+    const { sessionId, refreshToken } = await this.createSession(
       user.id,
       randomUUID(),
       meta,
     );
     return {
-      accessToken: this.buildAccessToken(authUser),
+      accessToken: this.buildAccessToken(authUser, sessionId),
       refreshToken,
       user: authUser,
     };

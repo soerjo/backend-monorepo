@@ -1,4 +1,4 @@
-# my-cms-service — Content Management System API
+# cms-service — Content Management System API
 
 <p align="center"><em>NestJS v11 · Prisma v6 · PostgreSQL · MinIO (via minio-file-service) · Auth delegasi ke UMS</em></p>
 

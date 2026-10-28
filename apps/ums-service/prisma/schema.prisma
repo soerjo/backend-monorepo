@@ -1,0 +1,257 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum AuthTokenType {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+model User {
+  id              String     @id @default(uuid())
+  email           String     @unique
+  passwordHash    String
+  name            String?
+  emailVerifiedAt DateTime?
+  status          UserStatus @default(ACTIVE)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  sessions   Session[]
+  userRoles  UserRole[]
+  orgMembers OrgMember[]
+  authTokens AuthToken[]
+  mfaFactors MfaFactor[]
+
+  @@map("users")
+}
+
+model Session {
+  id             String    @id @default(uuid())
+  userId         String
+  refreshHash    String    @unique
+  family         String
+  userAgent      String?
+  ip             String?
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  replacedByHash String?
+  createdAt      DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([family])
+  @@map("sessions")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  assignedAt   DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members OrgMember[]
+
+  @@map("organizations")
+}
+
+model OrgMember {
+  orgId    String
+  userId   String
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, userId])
+  @@map("org_members")
+}
+
+model AuthToken {
+  id        String        @id @default(uuid())
+  userId    String
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("auth_tokens")
+}
+
+/// Audit log of security-relevant actions (ADR 0007: 30-day retention).
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorId     String?
+  actorType   String   @default("user")
+  action      String
+  severity    String   @default("info")
+  subjectType String?
+  subjectId   String?
+  ip          String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model MfaFactor {
+  id            String    @id @default(uuid())
+  userId        String
+  type          String    @default("totp")
+  secret        String
+  enabled       Boolean   @default(false)
+  confirmedAt   DateTime?
+  recoveryCodes String[]  @default([])
+  createdAt     DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("mfa_factors")
+}
+
+enum WebhookDeliveryStatus {
+  SUCCESS
+  FAILED
+}
+
+model ApiClient {
+  id                 String    @id @default(uuid())
+  name               String
+  clientId           String    @unique
+  clientSecretHash   String
+  scopes             String[]  @default([])
+  rateLimitPerMinute Int       @default(60)
+  lastUsedAt         DateTime?
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+
+  @@map("api_clients")
+}
+
+model WebhookEndpoint {
+  id         String   @id @default(uuid())
+  url        String
+  secretHash String
+  secretEnc  String
+  events     String[]
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  deliveries WebhookDelivery[]
+
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id           String                @id @default(uuid())
+  endpointId   String
+  event        String
+  status       WebhookDeliveryStatus
+  attempt      Int
+  responseCode Int?
+  latencyMs    Int?
+  createdAt    DateTime              @default(now())
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+  @@map("webhook_deliveries")
+}
+
+/// OIDC identity provider configuration (ADR 0006 — federation, v1).
+model IdentityProvider {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  issuer          String
+  clientId        String
+  clientSecretEnc String
+  scopes          String[] @default(["openid", "email", "profile"])
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("identity_providers")
+}
+
+model SecurityPolicy {
+  id                       String   @id @default("default")
+  accessTokenTtlMinutes    Int      @default(15)
+  refreshTokenTtlDays      Int      @default(30)
+  maxConcurrentSessions    Int      @default(5)
+  requireMfaForAdmins      Boolean  @default(true)
+  enableAuditRetentionDays Int      @default(30)
+  allowPasswordReset       Boolean  @default(true)
+  updatedAt                DateTime @updatedAt
+  createdAt                DateTime @default(now())
+
+  @@map("security_policies")
+}

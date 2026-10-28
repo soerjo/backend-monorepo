@@ -1,0 +1,6 @@
+export const M2M_TOKEN_TTL_SECONDS = 3600;
+export const DEFAULT_CLIENT_RATE_LIMIT_PER_MINUTE = 60;
+export const WEBHOOK_TEST_EVENT = 'webhook.test';
+export const WEBHOOK_MAX_ATTEMPTS = 3;
+export const WEBHOOK_RETRY_DELAY_MS = 5000;
+export const WEBHOOK_REQUEST_TIMEOUT_MS = 10000;

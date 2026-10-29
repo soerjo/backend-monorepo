@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolvePackageJsonExports": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2023",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+    "types": ["jest", "node"],
+    "strictNullChecks": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "noFallthroughCasesInSwitch": false,
+    "paths": {
+      "@workspace/common": ["../../packages/common/src/index.ts"],
+      "@workspace/common/*": ["../../packages/common/src/*"],
+      "@workspace/auth": ["../../packages/auth/src/index.ts"],
+      "@workspace/auth/*": ["../../packages/auth/src/*"],
+      "@workspace/events": ["../../packages/events/src/index.ts"],
+      "@workspace/events/*": ["../../packages/events/src/*"],
+      "@prisma/client": ["./src/generated/client"],
+      "@prisma/client/*": ["./src/generated/client/*"]
+    }
+  }
+}

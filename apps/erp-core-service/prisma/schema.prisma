@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum PoStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PARTIALLY_RECEIVED
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderSource {
+  POS
+  E_COMMERCE
+  MANUAL_B2B
+}
+
+enum SoStatus {
+  PENDING
+  PROCESSING
+  DISPATCHED
+  DELIVERED
+  COMPLETED
+  CANCELLED
+}
+
+enum EntrySource {
+  MANUAL
+  POS_SETTLEMENT
+  BILLING_INVOICE
+  WMS_MOVEMENT
+  PO_FULFILLMENT
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model ChartOfAccount {
+  id        String         @id @default(uuid()) @db.Uuid
+  code      String         @unique @db.VarChar(32)
+  name      String         @db.VarChar(255)
+  type      AccountType
+  parentId  String?        @map("parent_id") @db.Uuid
+  isActive  Boolean        @default(true) @map("is_active")
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent    ChartOfAccount?  @relation("CoaHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children  ChartOfAccount[] @relation("CoaHierarchy")
+  journalLines JournalLine[]
+
+  @@map("chart_of_accounts")
+}
+
+model Product {
+  id           String      @id @default(uuid()) @db.Uuid
+  sku          String      @unique @db.VarChar(64)
+  barcode      String?     @db.VarChar(64)
+  name         String      @db.VarChar(255)
+  uom          String      @db.VarChar(32)
+  costPrice    Decimal     @default(0.0000) @map("cost_price") @db.Decimal(15, 4)
+  sellingPrice Decimal     @default(0.0000) @map("selling_price") @db.Decimal(15, 4)
+  isActive     Boolean     @default(true) @map("is_active")
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  poItems      PurchaseOrderItem[]
+  soItems      SalesOrderItem[]
+
+  @@map("products")
+}
+
+model Vendor {
+  id        String          @id @default(uuid()) @db.Uuid
+  code      String          @unique @db.VarChar(32)
+  name      String          @db.VarChar(255)
+  email     String?         @db.VarChar(128)
+  phone     String?         @db.VarChar(32)
+  address   String?         @db.Text
+  taxNumber String?         @map("tax_number") @db.VarChar(64)
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  orders    PurchaseOrder[]
+
+  @@map("vendors")
+}
+
+model PurchaseOrder {
+  id                   String              @id @default(uuid()) @db.Uuid
+  poNumber             String              @unique @map("po_number") @db.VarChar(64)
+  vendorId             String              @map("vendor_id") @db.Uuid
+  orderDate            DateTime            @map("order_date") @db.Date
+  expectedDeliveryDate DateTime?           @map("expected_delivery_date") @db.Date
+  totalAmount          Decimal             @default(0.0000) @map("total_amount") @db.Decimal(18, 4)
+  taxAmount            Decimal             @default(0.0000) @map("tax_amount") @db.Decimal(18, 4)
+  status               PoStatus            @default(DRAFT)
+  createdBy            String              @map("created_by") @db.Uuid
+  approvedBy           String?             @map("approved_by") @db.Uuid
+  notes                String?             @db.Text
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  vendor               Vendor              @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  items                PurchaseOrderItem[]
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id          String        @id @default(uuid()) @db.Uuid
+  poId        String        @map("po_id") @db.Uuid
+  productId   String        @map("product_id") @db.Uuid
+  qtyOrdered  Decimal       @map("qty_ordered") @db.Decimal(12, 4)
+  qtyReceived Decimal       @default(0.0000) @map("qty_received") @db.Decimal(12, 4)
+  unitPrice   Decimal       @map("unit_price") @db.Decimal(15, 4)
+  lineTotal   Decimal       @map("line_total") @db.Decimal(18, 4)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("purchase_order_items")
+}
+
+model SalesOrder {
+  id                  String           @id @default(uuid()) @db.Uuid
+  orderNumber         String           @unique @map("order_number") @db.VarChar(64)
+  source              OrderSource
+  externalReferenceId String?          @map("external_reference_id") @db.VarChar(128)
+  customerName        String?          @map("customer_name") @db.VarChar(255)
+  totalAmount         Decimal          @map("total_amount") @db.Decimal(18, 4)
+  status              SoStatus         @default(PENDING)
+  syncToWms           Boolean          @default(false) @map("sync_to_wms")
+  wmsFulfillmentId    String?          @map("wms_fulfillment_id") @db.VarChar(128)
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  items               SalesOrderItem[]
+
+  @@index([externalReferenceId], map: "idx_so_external_ref")
+  @@map("sales_orders")
+}
+
+model SalesOrderItem {
+  id        String     @id @default(uuid()) @db.Uuid
+  soId      String     @map("so_id") @db.Uuid
+  productId String     @map("product_id") @db.Uuid
+  qty       Decimal    @db.Decimal(12, 4)
+  unitPrice Decimal    @map("unit_price") @db.Decimal(15, 4)
+  lineTotal Decimal    @map("line_total") @db.Decimal(18, 4)
+
+  salesOrder SalesOrder @relation(fields: [soId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("sales_order_items")
+}
+
+model JournalEntry {
+  id          String         @id @default(uuid()) @db.Uuid
+  entryNumber String         @unique @map("entry_number") @db.VarChar(64)
+  entryDate   DateTime       @map("entry_date") @db.Date
+  source      EntrySource
+  referenceId String?        @map("reference_id") @db.VarChar(128)
+  memo        String?        @db.Text
+  isPosted    Boolean        @default(false) @map("is_posted")
+  postedAt    DateTime?      @map("posted_at") @db.Timestamptz(6)
+  createdBy   String         @map("created_by") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  lines       JournalLine[]
+
+  @@index([entryDate], map: "idx_journal_entries_date")
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id              String         @id @default(uuid()) @db.Uuid
+  journalEntryId  String         @map("journal_entry_id") @db.Uuid
+  accountId       String         @map("account_id") @db.Uuid
+  debit           Decimal        @default(0.0000) @db.Decimal(18, 4)
+  credit          Decimal        @default(0.0000) @db.Decimal(18, 4)
+  lineDescription String?        @map("line_description") @db.VarChar(255)
+
+  journalEntry    JournalEntry   @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account         ChartOfAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([accountId], map: "idx_journal_lines_account_id")
+  @@map("journal_lines")
+}
+
+model OutboxEvent {
+  id            String       @id @default(uuid()) @db.Uuid
+  aggregateType String       @map("aggregate_type") @db.VarChar(64)
+  aggregateId   String       @map("aggregate_id") @db.VarChar(128)
+  eventType     String       @map("event_type") @db.VarChar(128)
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  processedAt   DateTime?    @map("processed_at") @db.Timestamptz(6)
+  retryCount    Int          @default(0) @map("retry_count")
+
+  @@index([createdAt], map: "idx_outbox_unprocessed")
+  @@map("outbox_events")
+}
+
+model IdempotencyKey {
+  key         String    @id @db.VarChar(128)
+  endpoint    String    @db.VarChar(255)
+  requestHash String    @map("request_hash") @db.VarChar(64)
+  response    Json?
+  statusCode  Int?      @map("status_code")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
+
+  @@map("idempotency_keys")
+}
